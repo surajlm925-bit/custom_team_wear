@@ -1,0 +1,36 @@
+{
+  "name": "custom-teamwear-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Click-first Telegram bot for Custom Teamwear bulk apparel orders (WhatsApp-portable core).",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "vercel dev",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test \"tests/**/*.test.ts\"",
+    "set-webhook": "tsx scripts/set-webhook.ts",
+    "delete-webhook": "tsx scripts/delete-webhook.ts"
+  },
+  "dependencies": {
+    "@grammyjs/conversations": "2.1.1",
+    "@sentry/node": "10.71.0",
+    "@upstash/ratelimit": "2.0.8",
+    "@upstash/redis": "1.38.3",
+    "google-auth-library": "11.0.2",
+    "google-spreadsheet": "5.3.0",
+    "grammy": "1.46.0",
+    "qrcode": "1.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "26.4.0",
+    "@types/qrcode": "1.5.6",
+    "@vercel/node": "8.1.2",
+    "tsx": "4.23.12",
+    "typescript": "7.0.2"
+  }
+}

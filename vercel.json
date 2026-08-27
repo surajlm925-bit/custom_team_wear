@@ -1,0 +1,18 @@
+{
+  "functions": {
+    "api/webhook.ts": {
+      "memory": 1024,
+      "maxDuration": 10
+    },
+    "api/heartbeat.ts": {
+      "memory": 256,
+      "maxDuration": 10
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/heartbeat",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}
