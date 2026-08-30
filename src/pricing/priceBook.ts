@@ -13,6 +13,20 @@ export type ProductId =
   | "cotton_round_neck"
   | "cotton_polo";
 
+/**
+ * Mockup silhouette — fabric material doesn't change how a logo mockup
+ * looks, so every product maps to one of just two garment shapes for
+ * mockup-rendering purposes (see docs/Mockup-Template-Generation.md §2, §6).
+ */
+export type Silhouette = "round_neck" | "polo";
+
+export const PRODUCT_SILHOUETTE: Record<ProductId, Silhouette> = {
+  dry_fit_round_neck: "round_neck",
+  cotton_round_neck: "round_neck",
+  dry_fit_polo: "polo",
+  cotton_polo: "polo",
+};
+
 export interface ProductCatalogEntry {
   id: ProductId;
   /** Display label, tier-specific (e.g. Branded renames to "Branded Polo Tee"). */
@@ -146,6 +160,45 @@ export const PRINT_METHODS: PrintMethodEntry[] = [
 export const MOQ = 50;
 export const BRACKET_THRESHOLD = 100;
 export const HIGH_VALUE_CALLOUT_QTY = 300;
+
+/**
+ * Logo placement options — per client's Logo Placement Flow spec
+ * (docs/Mockup-Template-Generation.md §7). Left/right sleeve are distinct
+ * options (rather than a single "sleeve" choice) so a customer with two
+ * logos can put one on each arm. "Front + Back" from the original client
+ * spec is now expressed by uploading the same logo twice (once for
+ * left_chest, once for upper_back) via the multi-logo loop, rather than
+ * being a separate placement value — this keeps every placement mapped
+ * to exactly one template view, which simplifies rendering.
+ */
+export type LogoPlacement = "left_chest" | "center_front" | "upper_back" | "left_sleeve" | "right_sleeve";
+
+export interface LogoPlacementEntry {
+  id: LogoPlacement;
+  label: string;
+  hint: string;
+}
+
+export const LOGO_PLACEMENTS: LogoPlacementEntry[] = [
+  { id: "left_chest", label: "Left Chest", hint: "Professional company logo" },
+  { id: "center_front", label: "Centre Front", hint: "Large logo / design" },
+  { id: "upper_back", label: "Upper Back", hint: "Company / event name" },
+  { id: "left_sleeve", label: "Left Sleeve", hint: "Secondary logo / partner logo" },
+  { id: "right_sleeve", label: "Right Sleeve", hint: "Secondary logo / partner logo" },
+];
+
+export type ApplicationMethod = "print" | "embroidery" | "recommend";
+
+export interface ApplicationMethodEntry {
+  id: ApplicationMethod;
+  label: string;
+}
+
+export const APPLICATION_METHODS: ApplicationMethodEntry[] = [
+  { id: "print", label: "Print" },
+  { id: "embroidery", label: "Embroidery" },
+  { id: "recommend", label: "Not sure — recommend" },
+];
 
 export const SIZE_KEYS = ["S", "M", "L", "XL", "XXL", "3XL"] as const;
 export type SizeKey = (typeof SIZE_KEYS)[number];

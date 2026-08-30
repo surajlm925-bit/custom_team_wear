@@ -2,7 +2,12 @@
  * Shared domain types used across pricing, session, sheets, and rendering.
  */
 
-import type { PrintMethod, ProductId, SizeKey, Tier } from "../pricing/priceBook.js";
+import type { LogoPlacement, PrintMethod, ProductId, SizeKey, Tier } from "../pricing/priceBook.js";
+
+export interface LogoUpload {
+  fileId: string;
+  placement: LogoPlacement;
+}
 
 export type OrderStatus =
   | "Pending Payment"
@@ -30,7 +35,8 @@ export interface OrderData {
   timeline: Timeline;
   timelineUrgent: boolean;
   logoReceived: boolean;
-  logoFileId?: string;
+  /** Zero or more (logo, placement) pairs — customer can upload multiple logos, each at its own position. */
+  logos: LogoUpload[];
   garmentRate: number;
   garmentTotal: number;
   printEstLow: number;

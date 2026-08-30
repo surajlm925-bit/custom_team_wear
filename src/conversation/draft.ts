@@ -5,7 +5,7 @@
  */
 
 import type { PrintMethod, ProductId, SizeKey, Tier } from "../pricing/priceBook.js";
-import type { Timeline } from "../shared/types.js";
+import type { LogoUpload, Timeline } from "../shared/types.js";
 
 export interface OrderDraft {
   tier?: Tier;
@@ -19,7 +19,7 @@ export interface OrderDraft {
   timeline?: Timeline;
   timelineUrgent?: boolean;
   logoReceived?: boolean;
-  logoFileId?: string;
+  logos?: LogoUpload[];
   orderId?: string;
   updatedAt?: number;
 }

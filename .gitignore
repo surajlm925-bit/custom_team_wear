@@ -6,3 +6,17 @@ dist/
 .vercel/
 *.log
 audit.json
+
+# Google service account keys and other credential files that sometimes
+# get downloaded/saved into docs/ by mistake.
+docs/*.json
+docs/gen-lang-client-*.json
+.vercel
+.env*
+
+# Raw AI-generated mockup template sources (JPEGs) — superseded by the
+# processed PNGs committed under assets/mockup-templates/.
+docs/mockup temps/
+
+# Ad-hoc local test outputs from scripts/test-ai-mockup.mjs.
+test-mockup-output-*.png

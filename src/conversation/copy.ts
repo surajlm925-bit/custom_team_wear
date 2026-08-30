@@ -31,16 +31,25 @@ export const COPY = {
   printEcho: (label: string, low: number, high: number, hint: string) =>
     `Selected ${label} — ₹${low}–${high}/pc. ${hint}`,
 
+  placementAsk:
+    "Where should this logo go on the garment?\n\n" +
+    "1️⃣ Left Chest — Professional company logo\n" +
+    "2️⃣ Centre Front — Large logo / design\n" +
+    "3️⃣ Upper Back — Company / event name\n" +
+    "4️⃣ Left Sleeve — Secondary logo / partner logo\n" +
+    "5️⃣ Right Sleeve — Secondary logo / partner logo\n\n" +
+    "No artwork ready yet? Skip — our design team will help.",
+  placementEcho: (label: string) => `📍 ${label} selected. Now upload the logo/design for this placement 📎`,
+  logoUploadPrompt: "Please send the logo/design image for this placement.",
+  addAnotherLogoAsk: (count: number) =>
+    `Got it — ${count} logo${count === 1 ? "" : "s"} added. Want to add another logo at a different position?`,
+
   cityAsk: "Which city should we deliver to?",
   nameAsk: "Who should we address the order to? Please share your **name**.",
   phoneAsk: "Your **phone number** — used only for order updates & artwork approval.",
   phoneInvalid: "Hmm, that doesn't look like a valid Indian mobile number. Try again (10 digits)?",
 
   timelineAsk: "When do you need delivery?",
-
-  logoAsk:
-    "Almost done! Upload your **logo or design** 📎\n" +
-    "No artwork ready? Skip — our design team will help.",
 
   callMeAck: "Got it! Our senior team will call you within a few hours about your large order. 📞",
 

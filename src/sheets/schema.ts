@@ -17,6 +17,7 @@ export const ORDERS_HEADER = [
   "XXL",
   "3XL",
   "Print Method",
+  "Logo Placement",
   "City",
   "Name",
   "Phone",

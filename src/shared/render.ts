@@ -4,9 +4,16 @@
  * structurally impossible." Both functions below read only from OrderData.
  */
 
-import { TIER_LABELS } from "../pricing/priceBook.js";
+import { LOGO_PLACEMENTS, TIER_LABELS } from "../pricing/priceBook.js";
 import type { OrderData } from "./types.js";
 import { getProduct, getPrintMethod } from "../pricing/index.js";
+
+function placementLabel(order: OrderData): string {
+  if (order.logos.length === 0) return "none";
+  return order.logos
+    .map((logo) => LOGO_PLACEMENTS.find((p) => p.id === logo.placement)?.label ?? logo.placement)
+    .join(", ");
+}
 
 function formatRupees(n: number): string {
   return `₹${n.toLocaleString("en-IN")}`;
@@ -60,9 +67,9 @@ export function renderAdminCard(order: OrderData): string {
     "─────────────────",
     `\`${order.orderId}\` · ${tierLabel} · ${productLabel} · ${order.qty} pcs`,
     `Sizes: ${sizeSplitLine(order)}`,
-    `Print: ${getPrintMethod(order.printMethod).label} · Timeline: ${timelineLabel(order)} · City: ${order.city}`,
+    `Print: ${getPrintMethod(order.printMethod).label} · Placement: ${placementLabel(order)} · Timeline: ${timelineLabel(order)} · City: ${order.city}`,
     `Garment ${formatRupees(order.garmentTotal)} · Est. print ${formatRupees(order.printEstLow)}–${formatRupees(order.printEstHigh)} · Advance due **${formatRupees(order.advanceDue)}**`,
-    `Customer: ${order.name} · ${order.phone} · ${order.customerChatId} · Logo: ${order.logoReceived ? "received ✔" : "not provided"}`,
+    `Customer: ${order.name} · ${order.phone} · ${order.customerChatId} · Logos: ${order.logos.length > 0 ? `${order.logos.length} received ✔` : "not provided"}`,
     "─────────────────",
   ];
   return lines.join("\n");

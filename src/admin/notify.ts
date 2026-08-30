@@ -8,6 +8,7 @@ import { Bot, InlineKeyboard } from "grammy";
 import { getEnv } from "../config/env.js";
 import { renderAdminCard } from "../shared/render.js";
 import type { OrderData } from "../shared/types.js";
+import { saveOrderSnapshot } from "../session/orderStore.js";
 
 let botInstance: Bot | undefined;
 
@@ -30,6 +31,11 @@ export async function notifyAdmins(order: OrderData, screenshotFileId: string): 
   const bot = getBot();
   const card = renderAdminCard(order);
   const keyboard = adminActionKeyboard(order.orderId);
+
+  // Snapshot the full order so the admin Confirm action can trigger mockup
+  // generation later — the admin card's caption text alone doesn't carry
+  // enough fields (productId, logoFileId, logoPlacement) for that.
+  await saveOrderSnapshot(order).catch((err) => console.error("Failed to save order snapshot", err));
 
   for (const adminChatId of env.ADMIN_CHAT_IDS) {
     try {

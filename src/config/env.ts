@@ -29,6 +29,10 @@ export interface Env {
   GOOGLE_SERVICE_ACCOUNT_JSON: string;
   SHEET_ID: string;
   SENTRY_DSN?: string;
+  OPENROUTER_API_KEY?: string;
+  MOCKUP_IMAGE_MODEL?: string;
+  GEMINI_API_KEY?: string;
+  MOCKUP_IMAGE_PROVIDER?: string;
 }
 
 let cached: Env | undefined;
@@ -73,6 +77,10 @@ export function getEnv(): Env {
     GOOGLE_SERVICE_ACCOUNT_JSON: required("GOOGLE_SERVICE_ACCOUNT_JSON"),
     SHEET_ID: required("SHEET_ID"),
     SENTRY_DSN: optional("SENTRY_DSN"),
+    OPENROUTER_API_KEY: optional("OPENROUTER_API_KEY"),
+    MOCKUP_IMAGE_MODEL: optional("MOCKUP_IMAGE_MODEL"),
+    GEMINI_API_KEY: optional("GEMINI_API_KEY"),
+    MOCKUP_IMAGE_PROVIDER: optional("MOCKUP_IMAGE_PROVIDER"),
   };
   return cached;
 }

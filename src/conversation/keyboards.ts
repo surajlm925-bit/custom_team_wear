@@ -8,6 +8,7 @@
 
 import { InlineKeyboard } from "grammy";
 import {
+  LOGO_PLACEMENTS,
   PRINT_METHODS,
   PRODUCT_CATALOG,
   TIER_FROM_RATE,
@@ -89,8 +90,20 @@ export function timelineMenu(): InlineKeyboard {
     .text("🗓 Flexible — 15+ days", "timeline:flexible");
 }
 
-export function logoMenu(): InlineKeyboard {
-  return new InlineKeyboard().text("⏭ Skip — no artwork yet", "logo:skip");
+export function logoPlacementMenu(): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  LOGO_PLACEMENTS.forEach((placement, i) => {
+    kb.text(`${i + 1}️⃣ ${placement.label}`, `placement:${placement.id}`).row();
+  });
+  kb.text("⏭ Skip — no artwork yet", "logo:skip");
+  return kb;
+}
+
+export function addAnotherLogoMenu(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("➕ Add another logo", "logo:more")
+    .row()
+    .text("✅ No more — continue", "logo:done");
 }
 
 export function quoteCardMenu(advanceDue: number, showCallMe: boolean): InlineKeyboard {

@@ -9,8 +9,19 @@ import { JWT } from "google-auth-library";
 import { getEnv } from "../config/env.js";
 import { ORDERS_HEADER, type OrdersRow } from "./schema.js";
 import type { OrderData } from "../shared/types.js";
-import { TIER_LABELS } from "../pricing/priceBook.js";
+import { LOGO_PLACEMENTS, TIER_LABELS } from "../pricing/priceBook.js";
 import { getProduct, getPrintMethod } from "../pricing/index.js";
+
+function logoPlacementSummary(order: OrderData): string {
+  if (order.logos.length === 0) return "";
+  return order.logos
+    .map((logo) => LOGO_PLACEMENTS.find((p) => p.id === logo.placement)?.label ?? logo.placement)
+    .join(", ");
+}
+
+function logoFileIdSummary(order: OrderData): string {
+  return order.logos.map((logo) => logo.fileId).join(", ");
+}
 
 let cachedSheet: GoogleSpreadsheetWorksheet | undefined;
 
@@ -61,13 +72,14 @@ export function orderToRow(order: OrderData): OrdersRow {
     XXL: order.sizeSplit.XXL,
     "3XL": order.sizeSplit["3XL"],
     "Print Method": getPrintMethod(order.printMethod).label,
+    "Logo Placement": logoPlacementSummary(order),
     City: order.city,
     Name: order.name,
     Phone: order.phone,
     Timeline: order.timeline,
     "Timeline Urgent Y/N": order.timelineUrgent ? "Y" : "N",
     "Logo Received Y/N": order.logoReceived ? "Y" : "N",
-    "Logo File ID": order.logoFileId ?? "",
+    "Logo File ID": logoFileIdSummary(order),
     "Garment Rate/pc": order.garmentRate,
     "Garment Total": order.garmentTotal,
     "Est Print Low": order.printEstLow,

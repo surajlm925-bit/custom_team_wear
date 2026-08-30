@@ -13,6 +13,8 @@ import { COPY } from "../conversation/copy.js";
 import { updateOrderRowStatus } from "../sheets/client.js";
 import { renderConfirmationDm } from "../shared/render.js";
 import { getRedis } from "../session/redisClient.js";
+import { loadOrderSnapshot } from "../session/orderStore.js";
+import { deliverMockupForOrder } from "../mockup/deliver.js";
 
 const PROCESSED_TTL_SECONDS = 90 * 24 * 60 * 60; // long enough to safely catch duplicate presses
 
@@ -98,6 +100,23 @@ export function registerAdminActions(bot: Bot<MyContext>): void {
           .catch((err) => console.error("Failed to DM customer on confirm", err));
       } else {
         console.error(`Could not extract customer chat id from admin card caption for order ${orderId}`);
+      }
+
+      // Send the AI-rendered logo mockup to the customer. This is AWAITED
+      // deliberately: Vercel serverless functions terminate as soon as the
+      // handler returns, so a fire-and-forget call here would be killed
+      // mid-flight before the ~30-40s AI generation call completes (this
+      // is exactly what happened before this fix — the mockup silently
+      // never arrived). deliverMockupForOrder catches its own errors
+      // internally and never throws, so this never blocks/breaks
+      // confirmation even if mockup generation fails.
+      const orderSnapshot = await loadOrderSnapshot(orderId).catch(() => undefined);
+      if (orderSnapshot) {
+        await deliverMockupForOrder(orderSnapshot).catch((err) =>
+          console.error(`Unhandled error delivering mockup for ${orderId}`, err),
+        );
+      } else {
+        console.warn(`No order snapshot found for ${orderId}; skipping mockup delivery.`);
       }
     } else {
       await updateOrderRowStatus(orderId, "Payment Issue").catch((err) => {

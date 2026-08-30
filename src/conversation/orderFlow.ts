@@ -7,9 +7,10 @@
 import { InputFile } from "grammy";
 import { COPY } from "./copy.js";
 import {
+  addAnotherLogoMenu,
   bracketRevealMenu,
   cancelOnlyMenu,
-  logoMenu,
+  logoPlacementMenu,
   paymentScreenMenu,
   printMethodMenu,
   productMenu,
@@ -35,7 +36,8 @@ import {
   resolveStandardMix,
   showsCallMe,
 } from "../pricing/index.js";
-import type { PrintMethod, ProductId, Tier } from "../pricing/priceBook.js";
+import type { LogoPlacement, PrintMethod, ProductId, Tier } from "../pricing/priceBook.js";
+import { LOGO_PLACEMENTS } from "../pricing/priceBook.js";
 import { isValidQty, normalizeIndianPhone, sanitizeCity, sanitizeName } from "../shared/sanitize.js";
 import { renderQuoteCard } from "../shared/render.js";
 import type { OrderData, Timeline } from "../shared/types.js";
@@ -324,28 +326,74 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
     await persist();
   }
 
-  // ---- S9 Logo upload ----
+  // ---- S9 Logo upload — multi-logo loop (per client Logo Placement Flow spec) ----
+  // Each iteration: pick a placement (or skip entirely on the first pass),
+  // then upload the logo image for that placement, then ask whether to add
+  // another logo at a different position. Repeats until the user picks
+  // "No more" or has skipped.
   if (draft.logoReceived === undefined) {
-    await ctx.reply(COPY.logoAsk, { reply_markup: logoMenu() });
-    const logoResult = await waitForStep<{ skipped: boolean; fileId?: string }>(
-      conversation,
-      (c) => {
-        if (isCancelCallback(c)) return CANCEL;
-        const data = c.callbackQuery?.data;
-        if (data === "logo:skip") return { skipped: true };
-        const photo = c.message?.photo;
-        if (photo && photo.length > 0) {
-          return { skipped: false, fileId: photo[photo.length - 1].file_id };
-        }
-        const doc = c.message?.document;
-        if (doc) return { skipped: false, fileId: doc.file_id };
-        return undefined;
-      },
-      (c) => c.reply(COPY.genericReprompt),
-    );
-    if (logoResult === CANCEL) return abandon();
-    draft.logoReceived = !logoResult.skipped;
-    draft.logoFileId = logoResult.fileId;
+    draft.logos = draft.logos ?? [];
+    let addingMore = true;
+
+    while (addingMore) {
+      await ctx.reply(COPY.placementAsk, { reply_markup: logoPlacementMenu() });
+      const placementResult = await waitForStep<LogoPlacement | "skip">(
+        conversation,
+        (c) => {
+          if (isCancelCallback(c)) return CANCEL;
+          const data = c.callbackQuery?.data;
+          if (data === "logo:skip") return "skip";
+          if (!data?.startsWith("placement:")) return undefined;
+          return data.slice("placement:".length) as LogoPlacement;
+        },
+        (c) => c.reply(COPY.genericReprompt),
+      );
+      if (placementResult === CANCEL) return abandon();
+
+      if (placementResult === "skip") {
+        addingMore = false;
+        break;
+      }
+
+      const placementEntry = LOGO_PLACEMENTS.find((p) => p.id === placementResult)!;
+      await ctx.reply(COPY.placementEcho(placementEntry.label));
+
+      const logoUploadResult = await waitForStep<{ fileId: string }>(
+        conversation,
+        (c) => {
+          if (isCancelCallback(c)) return CANCEL;
+          const photo = c.message?.photo;
+          if (photo && photo.length > 0) {
+            return { fileId: photo[photo.length - 1].file_id };
+          }
+          const doc = c.message?.document;
+          if (doc) return { fileId: doc.file_id };
+          return undefined;
+        },
+        (c) => c.reply(COPY.logoUploadPrompt),
+      );
+      if (logoUploadResult === CANCEL) return abandon();
+
+      draft.logos!.push({ fileId: logoUploadResult.fileId, placement: placementResult });
+      await persist();
+
+      await ctx.reply(COPY.addAnotherLogoAsk(draft.logos!.length), { reply_markup: addAnotherLogoMenu() });
+      const continueChoice = await waitForStep<"more" | "done">(
+        conversation,
+        (c) => {
+          if (isCancelCallback(c)) return CANCEL;
+          const data = c.callbackQuery?.data;
+          if (data === "logo:more") return "more";
+          if (data === "logo:done") return "done";
+          return undefined;
+        },
+        (c) => c.reply(COPY.genericReprompt),
+      );
+      if (continueChoice === CANCEL) return abandon();
+      addingMore = continueChoice === "more";
+    }
+
+    draft.logoReceived = (draft.logos?.length ?? 0) > 0;
     await persist();
   }
 
@@ -376,7 +424,7 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
     timeline: draft.timeline!,
     timelineUrgent: draft.timelineUrgent ?? false,
     logoReceived: draft.logoReceived ?? false,
-    logoFileId: draft.logoFileId,
+    logos: draft.logos ?? [],
     garmentRate: garment.ratePerPiece,
     garmentTotal: garment.total,
     printEstLow: printEstimate.low,
@@ -516,7 +564,7 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
         timeline: draft.timeline ?? "flexible",
         timelineUrgent: draft.timelineUrgent ?? false,
         logoReceived: draft.logoReceived ?? false,
-        logoFileId: draft.logoFileId,
+        logos: draft.logos ?? [],
         garmentRate: 0,
         garmentTotal: 0,
         printEstLow: 0,
