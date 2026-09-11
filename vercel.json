@@ -3,11 +3,12 @@
     "api/webhook.ts": {
       "memory": 1024,
       "maxDuration": 30,
-      "includeFiles": "assets/catalog/**"
+      "includeFiles": "assets/**"
     },
     "api/mockup-delivery.ts": {
       "memory": 1024,
-      "maxDuration": 120
+      "maxDuration": 120,
+      "includeFiles": "assets/**"
     },
     "api/heartbeat.ts": {
       "memory": 256,
