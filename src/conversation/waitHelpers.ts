@@ -28,6 +28,16 @@ export async function waitForStep<T>(
     if (next.callbackQuery) {
       await next.answerCallbackQuery().catch(() => {});
     }
+    // /start must always escape the active conversation and restart the flow.
+    // skip({next:true}) prevents this update from being consumed by the
+    // conversation replay and passes it to bot.command("start") downstream,
+    // which enters a fresh/resume order flow. Without this, grammY's
+    // conversation plugin intercepts /start and triggers the genericReprompt.
+    const text = next.message?.text?.trim();
+    if (text === "/start" || text?.startsWith("/start ")) {
+      await conversation.skip({ next: true });
+      return CANCEL; // unreachable after skip() unwinds the conversation
+    }
     const result = classify(next);
     if (result !== undefined) return result;
     await reprompt(next);
@@ -35,5 +45,8 @@ export async function waitForStep<T>(
 }
 
 export function isCancelCallback(ctx: Context): boolean {
-  return ctx.callbackQuery?.data === "cancel";
+  if (ctx.callbackQuery?.data === "cancel") return true;
+  const text = ctx.message?.text?.trim();
+  return text === "/cancel" || text?.startsWith("/cancel ") === true;
 }
+
