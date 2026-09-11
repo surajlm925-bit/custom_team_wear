@@ -60,7 +60,11 @@ function makeHarness(script: string[]) {
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-function run(script: string[], draft: OrderDraft = {}, tier: "basic" | "standard" | "branded" = "basic") {
+function run(
+  script: string[],
+  draft: OrderDraft = { garmentSilhouette: "collar" },
+  tier: "basic" | "standard" | "branded" = "basic",
+) {
   const h = makeHarness(script);
   const persist = async () => {};
   const promise = runCatalogSelection(
@@ -77,7 +81,7 @@ function run(script: string[], draft: OrderDraft = {}, tier: "basic" | "standard
 // Tests
 // ---------------------------------------------------------------------
 
-test("full flow: product -> quality -> color finalizes catalog selection", async () => {
+test("full flow: fabric -> quality -> color finalizes catalog selection", async () => {
   const qualities = getQualityOptions("basic", "cotton_polo");
   assert.ok(qualities.length >= 2, "basic cotton_polo should have multiple qualities");
   const chosenQuality = qualities[0];
@@ -85,11 +89,11 @@ test("full flow: product -> quality -> color finalizes catalog selection", async
 
   const { promise, sent } = run(
     [
-      "product:cotton_polo",
+      "fabric:cotton",
       `optquality:${chosenQuality.id}`,
       `optcolor:${encodeURIComponent(chosenColor)}`,
     ],
-    {},
+    { garmentSilhouette: "collar" },
     "basic",
   );
   const result = await promise;
@@ -115,10 +119,10 @@ test("auto-selects quality when only one exists and asks for color directly", as
 
   const { promise } = run(
     [
-      "product:cotton_round_neck",
+      "fabric:cotton",
       `optcolor:${encodeURIComponent(chosenColor)}`,
     ],
-    {},
+    { garmentSilhouette: "round_neck" },
     "basic",
   );
   const result = await promise;
@@ -129,17 +133,17 @@ test("auto-selects quality when only one exists and asks for color directly", as
   assert.equal(selection.colorName, chosenColor);
 });
 
-test("back from product returns back to tier selection", async () => {
-  const { promise } = run(["back"], {}, "basic");
+test("back from fabric returns back to tier selection", async () => {
+  const { promise } = run(["back"], { garmentSilhouette: "collar" }, "basic");
   const result = await promise;
   assert.equal(result, "back");
 });
 
 test("cancel at any stage aborts with CANCEL", async () => {
-  const { promise: p1 } = run(["cancel"], {}, "basic");
+  const { promise: p1 } = run(["cancel"], { garmentSilhouette: "collar" }, "basic");
   assert.equal(await p1, CANCEL);
 
-  const { promise: p2 } = run(["product:cotton_polo", "cancel"], {}, "basic");
+  const { promise: p2 } = run(["fabric:cotton", "cancel"], { garmentSilhouette: "collar" }, "basic");
   assert.equal(await p2, CANCEL);
 });
 
@@ -151,13 +155,13 @@ test("back navigation from color returns to quality selection", async () => {
 
   const { promise } = run(
     [
-      "product:cotton_polo",
+      "fabric:cotton",
       `optquality:${q1.id}`,
       "back", // back to quality menu
       `optquality:${q2.id}`,
       `optcolor:${encodeURIComponent(chosenColor)}`,
     ],
-    {},
+    { garmentSilhouette: "collar" },
     "basic",
   );
   const result = await promise;

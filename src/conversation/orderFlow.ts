@@ -1,27 +1,39 @@
 /**
  * The full S00-S11 conversation — PRD §5.
  * Implements the flow map exactly; every step is click-first except the
- * six typed inputs enumerated in PRD §5.5.
+ * typed inputs (qty, city, name, phone).
+ *
+ * New flow:
+ * 1. Greeting (bulk order | trial sample)
+ * 2. Round Neck | Collar
+ * 3. Quantity (typed input)
+ * 4. Delivery option (City, Name, Phone, Timeline)
+ * 5. Quality Tier (Value | Recommended | Premium)
+ * 6. Fabric & Sub-Quality (Cotton vs Polyester -> Sub-qualities from quality/)
+ * 7. Color (exact swatches)
+ * 8. Branding (Print | Embroidery)
+ * 9. Branding position + logo upload (up to 3)
+ * 10. Mockup (on white shirt)
+ * 11. Payment & Confirmation
  */
 
 import { InputFile } from "grammy";
 import { COPY } from "./copy.js";
 import {
   addAnotherLogoMenu,
-  bracketRevealMenu,
+  brandingMenu,
   cancelOnlyMenu,
+  garmentSilhouetteMenu,
   generateMockupMenu,
+  greetingOrderTypeMenu,
   logoPlacementMenu,
   paymentScreenMenu,
-  printMethodMenu,
   quoteCardMenu,
   resumeMenu,
-  sizeSplitModeMenu,
   tierMenu,
   timelineMenu,
 } from "./keyboards.js";
 import { CANCEL, isCancelCallback, waitForStep } from "./waitHelpers.js";
-import { collectOwnSizeSplit } from "./steps/sizeSplit.js";
 import { runCatalogSelection } from "./steps/catalogSelection.js";
 import type { MyConversation, MyConversationContext } from "./types.js";
 import {
@@ -29,17 +41,13 @@ import {
   computeGarmentTotal,
   computeGrandEstimate,
   computePrintEstimate,
-  getNextBracketRate,
-  getPrintMethod,
-  getProduct,
   meetsMoq,
   resolveEvenSplit,
-  resolveStandardMix,
   showsCallMe,
 } from "../pricing/index.js";
 import type { LogoPlacement, PrintMethod, Tier } from "../pricing/priceBook.js";
 import { LOGO_PLACEMENTS } from "../pricing/priceBook.js";
-import { isValidQty, normalizeIndianPhone, sanitizeCity, sanitizeName } from "../shared/sanitize.js";
+import { normalizeIndianPhone, sanitizeCity, sanitizeName } from "../shared/sanitize.js";
 import { renderQuoteCard } from "../shared/render.js";
 import type { OrderData, Timeline } from "../shared/types.js";
 import { generateUpiQrPng } from "../qr/index.js";
@@ -84,159 +92,93 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
     await conversation.external(() => saveDraft(chatId, draft));
   };
 
-  // ---- S00 Tier menu ----
-  if (!draft.tier) {
-    await ctx.reply(COPY.welcome, { reply_markup: tierMenu() });
-    const tierResult = await waitForStep<Tier>(
+  const discard = async () => {
+    await conversation.external(() => clearDraft(chatId));
+    await ctx.reply(COPY.discardGoodbye);
+  };
+
+  const abandon = async () => {
+    await conversation.external(() => clearDraft(chatId));
+    await ctx.reply(COPY.abandonedGoodbye);
+  };
+
+  // ---- Step 1: Greeting (bulk order vs trial sample) ----
+  if (!draft.orderType) {
+    await ctx.reply(COPY.greetingAsk, { reply_markup: greetingOrderTypeMenu() });
+    const orderTypeResult = await waitForStep<"bulk" | "sample">(
       conversation,
       (c) => {
         if (isCancelCallback(c)) return CANCEL;
         const data = c.callbackQuery?.data;
-        if (!data?.startsWith("tier:")) return undefined;
-        return data.slice("tier:".length) as Tier;
+        if (data === "order:bulk") return "bulk";
+        if (data === "order:sample") return "sample";
+        return undefined;
       },
       (c) => c.reply(COPY.genericReprompt),
     );
-    if (tierResult === CANCEL) return discard();
-    draft.tier = tierResult;
+    if (orderTypeResult === CANCEL) return discard();
+    draft.orderType = orderTypeResult;
     await persist();
   }
 
-  // ---- S1 Catalog selection: brand/category -> style -> image confirm -> colour ----
-  if (!draft.catalogSelection) {
-    const catalogResult = await runCatalogSelection(conversation, ctx, draft, draft.tier, persist);
-    if (catalogResult === CANCEL) return discard();
-    if (catalogResult === "assisted") {
-      // Customer was routed to assisted selection (e.g. an image-only
-      // brand like Reebok/Van Heusen with no auto-orderable items). The
-      // "contact our team" message has already been sent inside
-      // runCatalogSelection; end the flow here without a redundant
-      // cancellation message. The draft is cleared so /start begins fresh.
-      return discard();
-    }
-    if (catalogResult === "back") {
-      draft.tier = undefined;
-      draft.catalogGroupId = undefined;
-      draft.catalogItemId = undefined;
+  // ---- Step 2: Round Neck vs Collar ----
+  if (!draft.garmentSilhouette) {
+    await ctx.reply(COPY.garmentSilhouetteAsk, { reply_markup: garmentSilhouetteMenu() });
+    const garmentResult = await waitForStep<"round_neck" | "collar" | "back">(
+      conversation,
+      (c) => {
+        if (isCancelCallback(c)) return CANCEL;
+        const data = c.callbackQuery?.data;
+        if (data === "garment:round_neck") return "round_neck";
+        if (data === "garment:collar") return "collar";
+        if (data === "back") return "back";
+        return undefined;
+      },
+      (c) => c.reply(COPY.genericReprompt),
+    );
+    if (garmentResult === CANCEL) return discard();
+    if (garmentResult === "back") {
+      draft.orderType = undefined;
       await persist();
       return orderFlow(conversation, ctx);
     }
-    draft.catalogSelection = catalogResult;
-    draft.productId = catalogResult.productId;
-    draft.catalogGroupId = undefined;
-    draft.catalogItemId = undefined;
+    draft.garmentSilhouette = garmentResult;
     await persist();
   }
 
-  const tier = draft.tier;
-  const productId = draft.productId!;
-
-  // ---- S2a/S2b/S2c Quantity gate + bracket reveal ----
-  let qtyConfirmed = Boolean(draft.qty);
-  while (!qtyConfirmed) {
-    await ctx.reply(COPY.qtyAsk);
+  // ---- Step 3: Quantity (typed numeric input) ----
+  if (!draft.qty) {
+    const isSample = draft.orderType === "sample";
+    await ctx.reply(isSample ? COPY.qtyAskSample : COPY.qtyAsk);
     const qty = await waitForStep<number>(
       conversation,
       (c) => {
         if (isCancelCallback(c)) return CANCEL;
-        const text = c.message?.text;
-        if (text === undefined) return undefined;
-        const parsed = isValidQty(text);
-        return parsed ?? undefined;
+        const text = c.message?.text?.trim();
+        if (!text) return undefined;
+        const parsed = parseInt(text, 10);
+        if (isNaN(parsed) || parsed < 1 || parsed > 100000) return undefined;
+        if (isSample && parsed > 5) return undefined;
+        return parsed;
       },
-      (c) => c.reply(COPY.qtyInvalid),
+      (c) => c.reply(isSample ? "Please enter between 1 and 5 pieces for a trial sample." : COPY.qtyInvalid),
     );
     if (qty === CANCEL) return discard();
 
-    if (!meetsMoq(qty)) {
-      // PRD S2b: TERMINAL, zero logging anywhere.
+    if (!isSample && !meetsMoq(qty)) {
       await ctx.reply(COPY.rejection);
       await conversation.external(() => clearDraft(chatId));
       return;
     }
 
     draft.qty = qty;
+    draft.sizeSplit = resolveEvenSplit(qty);
     await persist();
-
-    const rate = computeGarmentTotal(tier, productId, qty).ratePerPiece;
-    const nextBracket = getNextBracketRate(tier, productId, qty);
-    const product = getProduct(productId);
-    let revealText = `✅ **${qty} pcs qualifies for pricing: ₹${rate}/pc** (${product.label[tier]})`;
-    if (nextBracket) {
-      revealText += `\n💡 At **${nextBracket.nextBracketQty} pcs** it drops to **₹${nextBracket.nextRate}/pc** — you'd save **₹${nextBracket.savingsTotal.toLocaleString("en-IN")}**.`;
-    }
-    revealText += `\n\nContinue with ${qty}?`;
-
-    await ctx.reply(revealText, { reply_markup: bracketRevealMenu() });
-    const bracketChoice = await waitForStep<"continue" | "change">(
-      conversation,
-      (c) => {
-        if (isCancelCallback(c)) return CANCEL;
-        const data = c.callbackQuery?.data;
-        if (data === "bracket:continue") return "continue";
-        if (data === "bracket:change") return "change";
-        return undefined;
-      },
-      (c) => c.reply(COPY.genericReprompt),
-    );
-    if (bracketChoice === CANCEL) return discard();
-    if (bracketChoice === "continue") qtyConfirmed = true;
-    // else loop back to ask quantity again
   }
 
   const qty = draft.qty!;
 
-  // ---- S3 Size split ----
-  if (!draft.sizeSplit) {
-    await ctx.reply(COPY.sizeSplitAsk(qty), { reply_markup: sizeSplitModeMenu() });
-    const splitMode = await waitForStep<"even" | "standard" | "own">(
-      conversation,
-      (c) => {
-        if (isCancelCallback(c)) return CANCEL;
-        const data = c.callbackQuery?.data;
-        if (data === "split:even") return "even";
-        if (data === "split:standard") return "standard";
-        if (data === "split:own") return "own";
-        return undefined;
-      },
-      (c) => c.reply(COPY.genericReprompt),
-    );
-    if (splitMode === CANCEL) return discard();
-
-    if (splitMode === "even") {
-      draft.sizeSplit = resolveEvenSplit(qty);
-    } else if (splitMode === "standard") {
-      draft.sizeSplit = resolveStandardMix(qty);
-    } else {
-      const own = await collectOwnSizeSplit(conversation, (text, extra) => ctx.reply(text, extra), qty);
-      if (own === CANCEL) return discard();
-      draft.sizeSplit = own;
-    }
-    await persist();
-  }
-
-  // ---- S4 Print method ----
-  if (!draft.printMethod) {
-    await ctx.reply(COPY.printAsk, { reply_markup: printMethodMenu() });
-    const printResult = await waitForStep<PrintMethod>(
-      conversation,
-      (c) => {
-        if (isCancelCallback(c)) return CANCEL;
-        const data = c.callbackQuery?.data;
-        if (!data?.startsWith("print:")) return undefined;
-        return data.slice("print:".length) as PrintMethod;
-      },
-      (c) => c.reply(COPY.genericReprompt),
-    );
-    if (printResult === CANCEL) return discard();
-    draft.printMethod = printResult;
-    await persist();
-
-    const method = getPrintMethod(printResult);
-    await ctx.reply(COPY.printEcho(method.label, method.range[0], method.range[1], method.hint));
-  }
-
-  // ---- S5 City ----
+  // ---- Step 4: Delivery option as it is now (City, Name, Phone, Timeline) ----
   if (!draft.city) {
     await ctx.reply(COPY.cityAsk, { reply_markup: cancelOnlyMenu() });
     const city = await waitForStep<string>(
@@ -254,7 +196,6 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
     await persist();
   }
 
-  // ---- S6 Name ----
   if (!draft.name) {
     await ctx.reply(COPY.nameAsk, { reply_markup: cancelOnlyMenu() });
     const name = await waitForStep<string>(
@@ -272,10 +213,8 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
     await persist();
   }
 
-  // ---- S7 Phone ----
   if (!draft.phone) {
     await ctx.reply(COPY.phoneAsk, { reply_markup: cancelOnlyMenu() });
-    let attempts = 0;
     let phone: string | typeof CANCEL | undefined;
     while (phone === undefined) {
       const raw = await waitForStep<string>(
@@ -293,25 +232,13 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
       if (normalized) {
         phone = normalized;
       } else {
-        attempts += 1;
-        if (attempts >= 2) {
-          await ctx.reply(COPY.phoneInvalid, { reply_markup: cancelOnlyMenu() });
-          const cancelChoice = await waitForStep<"cancel">(
-            conversation,
-            (c) => (isCancelCallback(c) ? "cancel" : undefined),
-            (c) => c.reply(COPY.phoneInvalid, { reply_markup: cancelOnlyMenu() }),
-          );
-          if (cancelChoice === "cancel") return abandon();
-        } else {
-          await ctx.reply(COPY.phoneInvalid, { reply_markup: cancelOnlyMenu() });
-        }
+        await ctx.reply(COPY.phoneInvalid, { reply_markup: cancelOnlyMenu() });
       }
     }
     draft.phone = phone;
     await persist();
   }
 
-  // ---- S8 Timeline ----
   if (!draft.timeline) {
     await ctx.reply(COPY.timelineAsk, { reply_markup: timelineMenu() });
     const timelineResult = await waitForStep<Timeline>(
@@ -332,16 +259,80 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
     await persist();
   }
 
-  // ---- S9 Logo upload — multi-logo loop (per client Logo Placement Flow spec) ----
-  // Each iteration: pick a placement (or skip entirely on the first pass),
-  // then upload the logo image for that placement, then ask whether to add
-  // another logo at a different position. Repeats until the user picks
-  // "No more" or has skipped.
+  // ---- Step 5: Quality Tier (Value | Recommended | Premium) ----
+  if (!draft.tier) {
+    await ctx.reply(COPY.welcome, { reply_markup: tierMenu() });
+    const tierResult = await waitForStep<Tier | "back">(
+      conversation,
+      (c) => {
+        if (isCancelCallback(c)) return CANCEL;
+        const data = c.callbackQuery?.data;
+        if (data === "back") return "back";
+        if (!data?.startsWith("tier:")) return undefined;
+        return data.slice("tier:".length) as Tier;
+      },
+      (c) => c.reply(COPY.genericReprompt),
+    );
+    if (tierResult === CANCEL) return abandon();
+    if (tierResult === "back") {
+      draft.timeline = undefined;
+      await persist();
+      return orderFlow(conversation, ctx);
+    }
+    draft.tier = tierResult;
+    await persist();
+  }
+
+  // ---- Step 6 & 7: Fabric & Sub-Quality & Color ----
+  if (!draft.catalogSelection) {
+    const catalogResult = await runCatalogSelection(conversation, ctx, draft, draft.tier!, persist);
+    if (catalogResult === CANCEL) return abandon();
+    if (catalogResult === "back") {
+      draft.tier = undefined;
+      await persist();
+      return orderFlow(conversation, ctx);
+    }
+    if (catalogResult === "assisted") return discard();
+    draft.catalogSelection = catalogResult;
+    draft.productId = catalogResult.productId;
+    await persist();
+  }
+
+  const tier = draft.tier!;
+  const productId = draft.productId!;
+
+  // ---- Step 8: Branding (Print | Embroidery) ----
+  if (!draft.printMethod) {
+    await ctx.reply(COPY.brandingTypeAsk, { reply_markup: brandingMenu() });
+    const brandingResult = await waitForStep<PrintMethod | "back">(
+      conversation,
+      (c) => {
+        if (isCancelCallback(c)) return CANCEL;
+        const data = c.callbackQuery?.data;
+        if (data === "branding:print") return "screen_print";
+        if (data === "branding:embroidery") return "embroidery";
+        if (data === "back") return "back";
+        return undefined;
+      },
+      (c) => c.reply(COPY.genericReprompt),
+    );
+    if (brandingResult === CANCEL) return abandon();
+    if (brandingResult === "back") {
+      draft.catalogSelection = undefined;
+      draft.colorName = undefined;
+      await persist();
+      return orderFlow(conversation, ctx);
+    }
+    draft.printMethod = brandingResult;
+    await persist();
+  }
+
+  // ---- Step 9: Branding position + logo upload (up to 3) ----
   if (draft.logoReceived === undefined) {
     draft.logos = draft.logos ?? [];
     let addingMore = true;
 
-    while (addingMore) {
+    while (addingMore && draft.logos.length < 3) {
       await ctx.reply(COPY.placementAsk, { reply_markup: logoPlacementMenu() });
       const placementResult = await waitForStep<LogoPlacement | "skip">(
         conversation,
@@ -380,32 +371,34 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
       );
       if (logoUploadResult === CANCEL) return abandon();
 
-      draft.logos!.push({ fileId: logoUploadResult.fileId, placement: placementResult });
+      draft.logos.push({ fileId: logoUploadResult.fileId, placement: placementResult });
       await persist();
 
-      await ctx.reply(COPY.addAnotherLogoAsk(draft.logos!.length), { reply_markup: addAnotherLogoMenu() });
-      const continueChoice = await waitForStep<"more" | "done">(
-        conversation,
-        (c) => {
-          if (isCancelCallback(c)) return CANCEL;
-          const data = c.callbackQuery?.data;
-          if (data === "logo:more") return "more";
-          if (data === "logo:done") return "done";
-          return undefined;
-        },
-        (c) => c.reply(COPY.genericReprompt),
-      );
-      if (continueChoice === CANCEL) return abandon();
-      addingMore = continueChoice === "more";
+      if (draft.logos.length < 3) {
+        await ctx.reply(COPY.addAnotherLogoAsk(draft.logos.length), { reply_markup: addAnotherLogoMenu() });
+        const continueChoice = await waitForStep<"more" | "done">(
+          conversation,
+          (c) => {
+            if (isCancelCallback(c)) return CANCEL;
+            const data = c.callbackQuery?.data;
+            if (data === "logo:more") return "more";
+            if (data === "logo:done") return "done";
+            return undefined;
+          },
+          (c) => c.reply(COPY.genericReprompt),
+        );
+        if (continueChoice === CANCEL) return abandon();
+        addingMore = continueChoice === "more";
+      } else {
+        addingMore = false;
+      }
     }
 
     draft.logoReceived = (draft.logos?.length ?? 0) > 0;
     await persist();
   }
 
-  // ---- Pricing + order object (order ID is created HERE, right after
-  // logo upload, so the mockup step below can tag all assets/history to a
-  // real order id BEFORE the payment stage) ----
+  // ---- Assemble Order Data ----
   const garment = computeGarmentTotal(tier, productId, qty);
   const printEstimate = computePrintEstimate(draft.printMethod!, qty);
   const grandEstimate = computeGrandEstimate(garment.total, printEstimate);
@@ -445,12 +438,7 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
     channel: "telegram",
   };
 
-  // ---- Mockup step (AFTER logo upload, BEFORE payment) ----
-  // Offer a preview mockup the moment we have artwork + a real order id.
-  // The mockup is generated (deterministic proof) before the customer
-  // pays their garment advance; all assets/history are tagged to
-  // order.orderId. Free for the first 3/month; #4+ goes through the
-  // ₹20 proof + admin-approval path (the customer is prompted separately).
+  // ---- Step 10: Mockup step (AFTER logo upload, BEFORE payment) ----
   if (order.logoReceived && order.logos.length > 0) {
     await ctx.reply(COPY.mockupOfferAsk, { reply_markup: generateMockupMenu(), parse_mode: "Markdown" });
     const mockupChoice = await waitForStep<"generate" | "skip">(
@@ -467,14 +455,6 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
     if (mockupChoice === CANCEL) return abandon();
     if (mockupChoice === "generate") {
       await ctx.reply(COPY.mockupGeneratingNote);
-      // Persist the order snapshot so the mockup workflow can recover full
-      // order data by id, then DISPATCH generation to the standalone
-      // /api/mockup-delivery function (fire-and-forget). Generation is far
-      // too slow for the webhook's budget, so it must never run here. All
-      // outcomes — delivered, quota-exceeded (customer is asked for the
-      // ₹20 payment), failures — are handled and messaged by that function
-      // (see api/mockup-delivery.ts). Never reintroduce an inline
-      // startMockupGeneration() call here.
       await conversation.external(async () => {
         await saveOrderSnapshot(order).catch(() => {});
         await triggerMockupDelivery(order.orderId);
@@ -482,7 +462,7 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
     }
   }
 
-  // ---- S10 Quote card ----
+  // ---- S11 Payment ----
   await ctx.reply(renderQuoteCard(order), {
     reply_markup: quoteCardMenu(advanceDue, showsCallMe(qty)),
     parse_mode: "Markdown",
@@ -499,59 +479,53 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
     },
     (c) => c.reply(COPY.genericReprompt),
   );
-
   if (quoteChoice === CANCEL) return abandon();
 
   if (quoteChoice === "callme") {
     await ctx.reply(COPY.callMeAck);
     await conversation.external(async () => {
       await safeAppendOrderRow({ ...order, status: "Lead — High-Value Callback" }).catch(() => {});
-      if (order.catalogSelection) await appendCatalogSelectionRow(order.orderId, order.catalogSelection);
-      await notifyAdminsText(
-        `📞 High-value callback requested: ${order.orderId} · ${order.name} · ${order.phone} · qty ${order.qty}`,
-      );
       await clearDraft(chatId);
+      await notifyAdminsText(
+        `📞 HIGH-VALUE CALLBACK REQUESTED for ${order.orderId} (${order.qty} pcs, ~₹${order.garmentTotal.toLocaleString("en-IN")}) by ${order.name} (${order.phone}, ${order.city}).`,
+      ).catch(() => {});
     });
     return;
   }
 
-  // ---- S11 Payment loop ----
-  const qrBuffer = await conversation.external(() =>
+  // Dynamic QR generation
+  const qrPng = await conversation.external(() =>
     generateUpiQrPng(env.MERCHANT_VPA, advanceDue, order.orderId),
   );
 
-  await ctx.replyWithPhoto(new InputFile(qrBuffer, `${order.orderId}-qr.png`), {
+  await ctx.replyWithPhoto(new InputFile(qrPng, `upi-${order.orderId}.png`), {
     caption: COPY.paymentIntro(`₹${advanceDue.toLocaleString("en-IN")}`),
-    reply_markup: paymentScreenMenu(),
     parse_mode: "Markdown",
-  });
-  await ctx.replyWithPhoto(env.STATIC_QR_URL, {
-    caption: "Static brand QR (fallback for older UPI apps)",
+    reply_markup: paymentScreenMenu(),
   });
 
-  const paymentOutcome = (await waitForStep<
-    { type: "screenshot"; fileId: string } | { type: "cancel" }
-  >(
+  const screenshotResult = await waitForStep<{ fileId: string }>(
     conversation,
     (c) => {
-      if (isCancelCallback(c)) return { type: "cancel" };
+      if (isCancelCallback(c)) return CANCEL;
       const photo = c.message?.photo;
       if (photo && photo.length > 0) {
-        return { type: "screenshot", fileId: photo[photo.length - 1].file_id };
+        return { fileId: photo[photo.length - 1].file_id };
       }
       const doc = c.message?.document;
-      if (doc) return { type: "screenshot", fileId: doc.file_id };
+      if (doc) return { fileId: doc.file_id };
       return undefined;
     },
     (c) => c.reply(COPY.genericReprompt),
-  )) as { type: "screenshot"; fileId: string } | { type: "cancel" };
+  );
 
-  if (paymentOutcome.type === "cancel") {
+  if (screenshotResult === CANCEL) {
     await conversation.external(async () => {
       await safeAppendOrderRow({ ...order, status: "Lead — No Payment" }).catch(() => {});
-      if (order.catalogSelection) await appendCatalogSelectionRow(order.orderId, order.catalogSelection);
-      await notifyAdminsText(`⚠️ Payment stalled: ${order.orderId} · ${order.name} · ${order.phone}`);
       await clearDraft(chatId);
+      await notifyAdminsText(
+        `⚠️ CUSTOMER CANCELLED AT PAYMENT: Order ${order.orderId} (${order.qty} pcs, ~₹${order.garmentTotal.toLocaleString("en-IN")}) by ${order.name} (${order.phone}).`,
+      ).catch(() => {});
     });
     await ctx.reply(COPY.abandonedGoodbye);
     return;
@@ -559,79 +533,23 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
 
   await ctx.reply(COPY.screenshotAck);
 
-  const screenshotFileId = paymentOutcome.fileId;
-
-  // Money-critical path: sheet write failure must not silently drop the
-  // order. safeAppendOrderRow escalates full order text to admins before
-  // rethrowing; the customer sees a generic apology instead of false success.
-  const sheetWriteFailed = await conversation.external(async () => {
-    try {
-      await safeAppendOrderRow(order);
-      if (order.catalogSelection) await appendCatalogSelectionRow(order.orderId, order.catalogSelection);
-      return false;
-    } catch {
-      return true;
-    } finally {
-      await clearDraft(chatId);
-    }
-  });
-
   await conversation.external(async () => {
-    await notifyAdmins(order, screenshotFileId);
-  });
-
-  if (sheetWriteFailed) {
-    await ctx.reply(
-      "Sorry, we hit a hiccup saving your order details — our team has already been notified and will follow up shortly. Your payment screenshot has been received. 🙏",
-    );
-  }
-
-  async function discard() {
-    await conversation.external(() => clearDraft(chatId));
-  }
-
-  async function abandon() {
-    // PRD §5.3: Cancel after qty entered -> Lead — Abandoned (no admin ping).
-    await conversation.external(async () => {
-      const partialOrder: OrderData = {
-        orderId: draft.orderId ?? `PENDING-${chatId}`,
-        status: "Lead — Abandoned",
-        tier: draft.tier!,
-        productId: draft.productId!,
-        catalogSelection: draft.catalogSelection,
-        qty: draft.qty!,
-        sizeSplit: (draft.sizeSplit as OrderData["sizeSplit"]) ?? {
-          S: 0,
-          M: 0,
-          L: 0,
-          XL: 0,
-          XXL: 0,
-          "3XL": 0,
-        },
-        printMethod: draft.printMethod ?? "not_sure",
-        city: draft.city ?? "",
-        name: draft.name ?? "",
-        phone: draft.phone ?? "",
-        timeline: draft.timeline ?? "flexible",
-        timelineUrgent: draft.timelineUrgent ?? false,
-        logoReceived: draft.logoReceived ?? false,
-        logos: draft.logos ?? [],
-        garmentRate: 0,
-        garmentTotal: 0,
-        printEstLow: 0,
-        printEstHigh: 0,
-        grandEstLow: 0,
-        grandEstHigh: 0,
-        advanceDue: 0,
-        customerChatId: `tg:${chatId}`,
-        channel: "telegram",
-      };
-      await safeAppendOrderRow(partialOrder).catch(() => {});
-      if (partialOrder.catalogSelection) {
-        await appendCatalogSelectionRow(partialOrder.orderId, partialOrder.catalogSelection);
-      }
-      await clearDraft(chatId);
+    await safeAppendOrderRow(order);
+    if (order.catalogSelection) {
+      await appendCatalogSelectionRow(order.orderId, order.catalogSelection).catch((err) => {
+        console.error(`CatalogSelection sheet append failed for ${order.orderId}:`, err);
+      });
+    }
+    await saveOrderSnapshot(order).catch(() => {});
+    await clearDraft(chatId);
+    await notifyAdmins(
+      order,
+      screenshotResult.fileId,
+    ).catch((err) => {
+      console.error(`Failed to notify admins for ${order.orderId}:`, err);
+      return notifyAdminsText(
+        `🚨 EMERGENCY: Payment screenshot received for ${order.orderId} (${order.name}, ${order.phone}), but photo forwarding failed. Check Telegram manually.`,
+      ).catch(() => {});
     });
-    await ctx.reply(COPY.abandonedGoodbye);
-  }
+  });
 }

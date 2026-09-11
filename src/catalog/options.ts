@@ -13,6 +13,16 @@ export interface QualityOption {
   colors: string[];
 }
 
+export type GarmentType = "round_neck" | "collar";
+export type FabricType = "cotton" | "polyester";
+
+export function resolveProductId(garment: GarmentType, fabric: FabricType): ProductId {
+  if (garment === "round_neck") {
+    return fabric === "cotton" ? "cotton_round_neck" : "dry_fit_round_neck";
+  }
+  return fabric === "cotton" ? "cotton_polo" : "dry_fit_polo";
+}
+
 export const CATALOG_OPTIONS: Record<Tier, Record<ProductId, QualityOption[]>> = {
   basic: {
     cotton_polo: [

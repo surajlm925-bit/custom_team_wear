@@ -18,12 +18,51 @@ import {
 } from "../pricing/priceBook.js";
 import type { CatalogGroup, CatalogItem, CatalogVariant } from "../catalog/index.js";
 
+export function greetingOrderTypeMenu(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("📦 Bulk Order (50+ pcs)", "order:bulk")
+    .row()
+    .text("🧪 Trial Sample (1–5 pcs)", "order:sample")
+    .row()
+    .text("❌ Cancel", "cancel");
+}
+
+export function garmentSilhouetteMenu(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("👕 Round Neck", "garment:round_neck")
+    .row()
+    .text("👔 Collar (Polo)", "garment:collar")
+    .row()
+    .text("🔙 Back", "back")
+    .text("❌ Cancel", "cancel");
+}
+
+export function fabricMenu(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("🌿 100% Cotton", "fabric:cotton")
+    .row()
+    .text("⚡ Polyester (Dry Fit)", "fabric:polyester")
+    .row()
+    .text("🔙 Back", "back")
+    .text("❌ Cancel", "cancel");
+}
+
+export function brandingMenu(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("🖨️ Printing (Screen / DTF)", "branding:print")
+    .row()
+    .text("🧵 Embroidery", "branding:embroidery")
+    .row()
+    .text("🔙 Back", "back")
+    .text("❌ Cancel", "cancel");
+}
+
 export function tierMenu(): InlineKeyboard {
   const kb = new InlineKeyboard();
   (Object.keys(TIER_LABELS) as Tier[]).forEach((tier) => {
     kb.text(`${TIER_LABELS[tier]} · from ₹${TIER_FROM_RATE[tier]}/pc`, `tier:${tier}`).row();
   });
-  kb.text("❌ Cancel", "cancel");
+  kb.text("🔙 Back", "back").text("❌ Cancel", "cancel");
   return kb;
 }
 

@@ -9,14 +9,26 @@ export const COPY = {
     "Minimum order: **50 pieces**.\n\n" +
     "Pick a quality tier to see products:",
 
+  greetingAsk:
+    "👋 Welcome to **Custom Teamwear** — premium custom apparel for corporates, teams, and events!\n\n" +
+    "Are you planning a bulk order or would you like to order a trial sample first?",
+
+  garmentSilhouetteAsk: "Choose your garment collar style:",
+
+  fabricAsk: "Select fabric material:",
+
+  brandingTypeAsk: "How would you like your branding done on the garment?",
+
+  qtyAskSample: "How many trial sample pieces would you like? (1–5 pieces):",
+
   resumePrompt: "You have an unfinished quote — resume it?",
 
   rejection:
     "😅 Whoa there — that's barely enough for one cricket team *and* its reserves!\n\n" +
-    "We start at **50 pieces** because below that our machines go on strike. 🤖\n\n" +
-    "Hit 50+ anytime — you know where to find me. Just send /start!",
+    "We start at **50 pieces** for bulk production. 🤖\n\n" +
+    "Hit 50+ anytime or select Trial Sample (1–5 pcs) to see our quality! Just send /start.",
 
-  qtyAsk: "How many pieces do you need? *(Minimum 50)*",
+  qtyAsk: "How many pieces do you need? Type the number below (e.g. 50, 100, 250):",
   qtyInvalid: "Please send a valid number of pieces (1–100,000).",
 
   catalogProductAsk: "Select a garment & fabric type:",
