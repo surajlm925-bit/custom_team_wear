@@ -83,21 +83,26 @@ export async function startMockupGeneration(
     // generation below without re-reserving quota (sticky free decision).
   }
 
+  const requestedViews = requestedViewsForOrder(order);
+
   // Create the durable record (idempotent — SET NX).
   await createGenerationIfAbsent({
     generationId,
     orderId: order.orderId,
     customerChatId: order.customerChatId,
-    requestedViews: requestedViewsForOrder(order),
+    requestedViews,
     logos: order.logos,
     catalogSelection: order.catalogSelection,
     garmentReferenceRef:
       order.catalogSelection?.referenceImagePath ?? order.catalogSelection?.referenceImageUrl,
   });
 
-  // Reserve against the monthly quota (idempotent per generationId — a
+  // Reserve against the quota: 1 free per phone number (idempotent per generationId — a
   // retry never consumes a second slot or re-charges).
-  const reservation = await reserveGeneration(order.customerChatId, generationId);
+  const reservation = await reserveGeneration(order.customerChatId, generationId, {
+    phone: order.phone,
+    views: requestedViews,
+  });
   await setQuotaOutcome(generationId, {
     free: reservation.free,
     amountInr: reservation.amountInr,

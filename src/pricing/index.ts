@@ -9,6 +9,8 @@ import {
   MOQ,
   PRODUCT_CATALOG,
   PRINT_METHODS,
+  SAMPLE_KIT_PRICES,
+  MOCKUP_PRICES,
   SIZE_KEYS,
   STANDARD_MIX_WEIGHTS,
   type PrintMethod,
@@ -16,6 +18,7 @@ import {
   type SizeKey,
   type Tier,
 } from "./priceBook.js";
+import type { MockupView } from "../shared/types.js";
 
 export type Bracket = "50-99" | "100+";
 
@@ -71,6 +74,28 @@ export function computeGarmentTotal(tier: Tier, productId: ProductId, qty: numbe
   return { ratePerPiece, qty, total: ratePerPiece * qty };
 }
 
+/** Fixed 3-piece trial sample kit total (1 Value + 1 Recommended + 1 Premium). */
+export function computeSampleKitTotal(fabric: "cotton" | "polyester"): GarmentTotal {
+  const total = SAMPLE_KIT_PRICES[fabric];
+  return {
+    ratePerPiece: Math.round(total / 3),
+    qty: 3,
+    total,
+  };
+}
+
+/**
+ * Computes fee for an extra mockup generation once free quota is used up.
+ * Single view (front only or back only): ₹10.
+ * Both front and back views: ₹20.
+ */
+export function computeMockupFee(views?: MockupView[]): number {
+  if (!views || views.length === 0) return MOCKUP_PRICES.singleView;
+  const hasFront = views.includes("front");
+  const hasBack = views.includes("back");
+  return hasFront && hasBack ? MOCKUP_PRICES.frontAndBack : MOCKUP_PRICES.singleView;
+}
+
 export interface PrintEstimate {
   low: number;
   high: number;
@@ -100,15 +125,19 @@ export function computeGrandEstimate(
 }
 
 /**
- * Advance due = ~50% of the garment total, rounded UP to the nearest
- * rupee. The garment advance secures the order; the remaining garment
- * balance + printing + GST are invoiced later (after artwork approval,
- * before production). Example: garment total ₹28,720 -> advance ₹14,360.
+ * Advance due = ~50% of the garment total for bulk orders, rounded UP to the nearest
+ * rupee. For trial sample kits, full 100% payment is collected.
  *
  * Math.ceil ensures we never under-collect by a fraction of a rupee on
  * odd totals (e.g. ₹359 → 179.5 → ₹180).
  */
-export function computeAdvanceDue(garmentTotal: number): number {
+export function computeAdvanceDue(
+  garmentTotal: number,
+  options?: { orderType?: "bulk" | "sample" },
+): number {
+  if (options?.orderType === "sample") {
+    return garmentTotal;
+  }
   return Math.ceil(garmentTotal * 0.5);
 }
 

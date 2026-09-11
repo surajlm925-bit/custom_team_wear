@@ -18,7 +18,7 @@ const DEFAULTS: Record<string, string> = {
   REDIS_REST_TOKEN: "test-redis-token",
   GOOGLE_SERVICE_ACCOUNT_JSON: '{"client_email":"test@test.iam","private_key":"x"}',
   SHEET_ID: "test-sheet-id",
-  MOCKUP_FREE_PER_MONTH: "3",
+  MOCKUP_FREE_PER_MONTH: "1",
   MOCKUP_PAID_PRICE_INR: "20",
 };
 

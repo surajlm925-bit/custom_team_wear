@@ -21,8 +21,8 @@ import { InputFile } from "grammy";
 import { COPY } from "./copy.js";
 import {
   addAnotherLogoMenu,
+  backAndCancelMenu,
   brandingMenu,
-  cancelOnlyMenu,
   garmentSilhouetteMenu,
   generateMockupMenu,
   greetingOrderTypeMenu,
@@ -30,6 +30,7 @@ import {
   paymentScreenMenu,
   quoteCardMenu,
   resumeMenu,
+  sampleKitFabricMenu,
   tierMenu,
   timelineMenu,
 } from "./keyboards.js";
@@ -41,12 +42,12 @@ import {
   computeGarmentTotal,
   computeGrandEstimate,
   computePrintEstimate,
+  computeSampleKitTotal,
   meetsMoq,
   resolveEvenSplit,
   showsCallMe,
 } from "../pricing/index.js";
-import type { LogoPlacement, PrintMethod, Tier } from "../pricing/priceBook.js";
-import { LOGO_PLACEMENTS } from "../pricing/priceBook.js";
+import type { LogoPlacement, PrintMethod, ProductId, Tier } from "../pricing/priceBook.js";
 import { normalizeIndianPhone, sanitizeCity, sanitizeName } from "../shared/sanitize.js";
 import { renderQuoteCard } from "../shared/render.js";
 import type { OrderData, Timeline } from "../shared/types.js";
@@ -86,6 +87,8 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
     } else {
       await conversation.external(() => clearDraft(chatId));
     }
+  } else if (existingDraft && !existingDraft.qty) {
+    await conversation.external(() => clearDraft(chatId));
   }
 
   const persist = async () => {
@@ -146,81 +149,140 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
     await persist();
   }
 
-  // ---- Step 3: Quantity (typed numeric input) ----
-  if (!draft.qty) {
-    const isSample = draft.orderType === "sample";
-    await ctx.reply(isSample ? COPY.qtyAskSample : COPY.qtyAsk);
-    const qty = await waitForStep<number>(
-      conversation,
-      (c) => {
-        if (isCancelCallback(c)) return CANCEL;
-        const text = c.message?.text?.trim();
-        if (!text) return undefined;
-        const parsed = parseInt(text, 10);
-        if (isNaN(parsed) || parsed < 1 || parsed > 100000) return undefined;
-        if (isSample && parsed > 5) return undefined;
-        return parsed;
-      },
-      (c) => c.reply(isSample ? "Please enter between 1 and 5 pieces for a trial sample." : COPY.qtyInvalid),
-    );
-    if (qty === CANCEL) return discard();
-
-    if (!isSample && !meetsMoq(qty)) {
-      await ctx.reply(COPY.rejection);
-      await conversation.external(() => clearDraft(chatId));
-      return;
+  // ---- Step 3: Quantity or Sample Kit Fabric ----
+  if (draft.orderType === "sample") {
+    if (!draft.fabric) {
+      await ctx.reply(COPY.sampleKitFabricAsk, { reply_markup: sampleKitFabricMenu(), parse_mode: "Markdown" });
+      const fabricResult = await waitForStep<"cotton" | "polyester" | "back">(
+        conversation,
+        (c) => {
+          if (isCancelCallback(c)) return CANCEL;
+          const data = c.callbackQuery?.data;
+          if (data === "fabric:cotton") return "cotton";
+          if (data === "fabric:polyester") return "polyester";
+          if (data === "back") return "back";
+          return undefined;
+        },
+        (c) => c.reply(COPY.genericReprompt),
+      );
+      if (fabricResult === CANCEL) return discard();
+      if (fabricResult === "back") {
+        draft.garmentSilhouette = undefined;
+        await persist();
+        return orderFlow(conversation, ctx);
+      }
+      draft.fabric = fabricResult;
+      draft.qty = 3;
+      draft.sizeSplit = resolveEvenSplit(3);
+      draft.tier = "standard";
+      const isCollar = draft.garmentSilhouette === "collar";
+      draft.productId = isCollar
+        ? (fabricResult === "cotton" ? "cotton_polo" : "dry_fit_polo")
+        : (fabricResult === "cotton" ? "cotton_round_neck" : "dry_fit_round_neck");
+      await persist();
     }
+  } else {
+    // Bulk branch: typed numeric quantity (MOQ 50)
+    if (!draft.qty) {
+      await ctx.reply(COPY.qtyAsk, { reply_markup: backAndCancelMenu() });
+      const qtyResult = await waitForStep<number | "back">(
+        conversation,
+        (c) => {
+          if (isCancelCallback(c)) return CANCEL;
+          if (c.callbackQuery?.data === "back") return "back";
+          const text = c.message?.text?.trim();
+          if (!text) return undefined;
+          const parsed = parseInt(text, 10);
+          if (isNaN(parsed) || parsed < 1 || parsed > 100000) return undefined;
+          return parsed;
+        },
+        (c) => c.reply(COPY.qtyInvalid),
+      );
+      if (qtyResult === CANCEL) return discard();
+      if (qtyResult === "back") {
+        draft.garmentSilhouette = undefined;
+        await persist();
+        return orderFlow(conversation, ctx);
+      }
 
-    draft.qty = qty;
-    draft.sizeSplit = resolveEvenSplit(qty);
-    await persist();
+      if (!meetsMoq(qtyResult)) {
+        await ctx.reply(COPY.rejection);
+        await conversation.external(() => clearDraft(chatId));
+        return;
+      }
+
+      draft.qty = qtyResult;
+      draft.sizeSplit = resolveEvenSplit(qtyResult);
+      await persist();
+    }
   }
 
   const qty = draft.qty!;
 
-  // ---- Step 4: Delivery option as it is now (City, Name, Phone, Timeline) ----
+  // ---- Step 4: Delivery option (City, Name, Phone, Timeline) ----
   if (!draft.city) {
-    await ctx.reply(COPY.cityAsk, { reply_markup: cancelOnlyMenu() });
-    const city = await waitForStep<string>(
+    await ctx.reply(COPY.cityAsk, { reply_markup: backAndCancelMenu() });
+    const cityResult = await waitForStep<string | "back">(
       conversation,
       (c) => {
         if (isCancelCallback(c)) return CANCEL;
+        if (c.callbackQuery?.data === "back") return "back";
         const text = c.message?.text?.trim();
         if (!text) return undefined;
         return sanitizeCity(text);
       },
       (c) => c.reply(COPY.genericReprompt),
     );
-    if (city === CANCEL) return abandon();
-    draft.city = city;
+    if (cityResult === CANCEL) return abandon();
+    if (cityResult === "back") {
+      if (draft.orderType === "sample") {
+        draft.fabric = undefined;
+        draft.qty = undefined;
+        draft.sizeSplit = undefined;
+        draft.productId = undefined;
+      } else {
+        draft.qty = undefined;
+        draft.sizeSplit = undefined;
+      }
+      await persist();
+      return orderFlow(conversation, ctx);
+    }
+    draft.city = cityResult;
     await persist();
   }
 
   if (!draft.name) {
-    await ctx.reply(COPY.nameAsk, { reply_markup: cancelOnlyMenu() });
-    const name = await waitForStep<string>(
+    await ctx.reply(COPY.nameAsk, { reply_markup: backAndCancelMenu() });
+    const nameResult = await waitForStep<string | "back">(
       conversation,
       (c) => {
         if (isCancelCallback(c)) return CANCEL;
+        if (c.callbackQuery?.data === "back") return "back";
         const text = c.message?.text?.trim();
         if (!text) return undefined;
         return sanitizeName(text);
       },
       (c) => c.reply(COPY.genericReprompt),
     );
-    if (name === CANCEL) return abandon();
-    draft.name = name;
+    if (nameResult === CANCEL) return abandon();
+    if (nameResult === "back") {
+      draft.city = undefined;
+      await persist();
+      return orderFlow(conversation, ctx);
+    }
+    draft.name = nameResult;
     await persist();
   }
 
   if (!draft.phone) {
-    await ctx.reply(COPY.phoneAsk, { reply_markup: cancelOnlyMenu() });
-    let phone: string | typeof CANCEL | undefined;
+    await ctx.reply(COPY.phoneAsk, { reply_markup: backAndCancelMenu() });
+    let phone: string | "back" | typeof CANCEL | undefined;
     while (phone === undefined) {
-      const raw = await waitForStep<string>(
+      const raw = await waitForStep<string | "back">(
         conversation,
         (c) => {
           if (isCancelCallback(c)) return CANCEL;
+          if (c.callbackQuery?.data === "back") return "back";
           const text = c.message?.text?.trim();
           if (!text) return undefined;
           return text;
@@ -228,11 +290,16 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
         (c) => c.reply(COPY.genericReprompt),
       );
       if (raw === CANCEL) return abandon();
+      if (raw === "back") {
+        draft.name = undefined;
+        await persist();
+        return orderFlow(conversation, ctx);
+      }
       const normalized = normalizeIndianPhone(raw);
       if (normalized) {
         phone = normalized;
       } else {
-        await ctx.reply(COPY.phoneInvalid, { reply_markup: cancelOnlyMenu() });
+        await ctx.reply(COPY.phoneInvalid, { reply_markup: backAndCancelMenu() });
       }
     }
     draft.phone = phone;
@@ -241,7 +308,7 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
 
   if (!draft.timeline) {
     await ctx.reply(COPY.timelineAsk, { reply_markup: timelineMenu() });
-    const timelineResult = await waitForStep<Timeline>(
+    const timelineResult = await waitForStep<Timeline | "back">(
       conversation,
       (c) => {
         if (isCancelCallback(c)) return CANCEL;
@@ -249,160 +316,194 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
         if (data === "timeline:urgent") return "urgent";
         if (data === "timeline:standard") return "standard";
         if (data === "timeline:flexible") return "flexible";
+        if (data === "back") return "back";
         return undefined;
       },
       (c) => c.reply(COPY.genericReprompt),
     );
     if (timelineResult === CANCEL) return abandon();
+    if (timelineResult === "back") {
+      draft.phone = undefined;
+      await persist();
+      return orderFlow(conversation, ctx);
+    }
     draft.timeline = timelineResult;
     draft.timelineUrgent = timelineResult === "urgent";
     await persist();
   }
 
-  // ---- Step 5: Quality Tier (Value | Recommended | Premium) ----
-  if (!draft.tier) {
-    await ctx.reply(COPY.welcome, { reply_markup: tierMenu() });
-    const tierResult = await waitForStep<Tier | "back">(
-      conversation,
-      (c) => {
-        if (isCancelCallback(c)) return CANCEL;
-        const data = c.callbackQuery?.data;
-        if (data === "back") return "back";
-        if (!data?.startsWith("tier:")) return undefined;
-        return data.slice("tier:".length) as Tier;
-      },
-      (c) => c.reply(COPY.genericReprompt),
-    );
-    if (tierResult === CANCEL) return abandon();
-    if (tierResult === "back") {
-      draft.timeline = undefined;
-      await persist();
-      return orderFlow(conversation, ctx);
-    }
-    draft.tier = tierResult;
-    await persist();
-  }
-
-  // ---- Step 6 & 7: Fabric & Sub-Quality & Color ----
-  if (!draft.catalogSelection) {
-    const catalogResult = await runCatalogSelection(conversation, ctx, draft, draft.tier!, persist);
-    if (catalogResult === CANCEL) return abandon();
-    if (catalogResult === "back") {
-      draft.tier = undefined;
-      await persist();
-      return orderFlow(conversation, ctx);
-    }
-    if (catalogResult === "assisted") return discard();
-    draft.catalogSelection = catalogResult;
-    draft.productId = catalogResult.productId;
-    await persist();
-  }
-
-  const tier = draft.tier!;
-  const productId = draft.productId!;
-
-  // ---- Step 8: Branding (Print | Embroidery) ----
-  if (!draft.printMethod) {
-    await ctx.reply(COPY.brandingTypeAsk, { reply_markup: brandingMenu() });
-    const brandingResult = await waitForStep<PrintMethod | "back">(
-      conversation,
-      (c) => {
-        if (isCancelCallback(c)) return CANCEL;
-        const data = c.callbackQuery?.data;
-        if (data === "branding:print") return "screen_print";
-        if (data === "branding:embroidery") return "embroidery";
-        if (data === "back") return "back";
-        return undefined;
-      },
-      (c) => c.reply(COPY.genericReprompt),
-    );
-    if (brandingResult === CANCEL) return abandon();
-    if (brandingResult === "back") {
-      draft.catalogSelection = undefined;
-      draft.colorName = undefined;
-      await persist();
-      return orderFlow(conversation, ctx);
-    }
-    draft.printMethod = brandingResult;
-    await persist();
-  }
-
-  // ---- Step 9: Branding position + logo upload (up to 3) ----
-  if (draft.logoReceived === undefined) {
-    draft.logos = draft.logos ?? [];
-    let addingMore = true;
-
-    while (addingMore && draft.logos.length < 3) {
-      await ctx.reply(COPY.placementAsk, { reply_markup: logoPlacementMenu() });
-      const placementResult = await waitForStep<LogoPlacement | "skip">(
+  // Steps 5, 6 & 7 apply to Bulk orders (Trial sample kits include all 3 qualities)
+  if (draft.orderType !== "sample") {
+    // ---- Step 5: Quality Tier (Value | Recommended | Premium) ----
+    if (!draft.tier) {
+      await ctx.reply(COPY.welcome, { reply_markup: tierMenu() });
+      const tierResult = await waitForStep<Tier | "back">(
         conversation,
         (c) => {
           if (isCancelCallback(c)) return CANCEL;
           const data = c.callbackQuery?.data;
-          if (data === "logo:skip") return "skip";
-          if (!data?.startsWith("placement:")) return undefined;
-          return data.slice("placement:".length) as LogoPlacement;
+          if (data === "back") return "back";
+          if (!data?.startsWith("tier:")) return undefined;
+          return data.slice("tier:".length) as Tier;
         },
         (c) => c.reply(COPY.genericReprompt),
       );
-      if (placementResult === CANCEL) return abandon();
-
-      if (placementResult === "skip") {
-        addingMore = false;
-        break;
+      if (tierResult === CANCEL) return abandon();
+      if (tierResult === "back") {
+        draft.timeline = undefined;
+        await persist();
+        return orderFlow(conversation, ctx);
       }
+      draft.tier = tierResult;
+      await persist();
+    }
 
-      const placementEntry = LOGO_PLACEMENTS.find((p) => p.id === placementResult)!;
-      await ctx.reply(COPY.placementEcho(placementEntry.label));
+    // ---- Step 6 & 7: Fabric & Sub-Quality & Color ----
+    if (!draft.catalogSelection) {
+      const catalogResult = await runCatalogSelection(conversation, ctx, draft, draft.tier!, persist);
+      if (catalogResult === CANCEL) return abandon();
+      if (catalogResult === "back") {
+        draft.tier = undefined;
+        await persist();
+        return orderFlow(conversation, ctx);
+      }
+      if (catalogResult === "assisted") return discard();
+      draft.catalogSelection = catalogResult;
+      draft.productId = catalogResult.productId;
+      await persist();
+    }
+  }
 
-      const logoUploadResult = await waitForStep<{ fileId: string }>(
+  if (draft.orderType === "sample") {
+    draft.printMethod = "none";
+    draft.logoReceived = false;
+    draft.logos = [];
+  } else {
+    // ---- Step 8: Branding (Print | Embroidery) ----
+    if (!draft.printMethod) {
+      await ctx.reply(COPY.brandingTypeAsk, { reply_markup: brandingMenu() });
+      const brandingResult = await waitForStep<PrintMethod | "back">(
         conversation,
         (c) => {
           if (isCancelCallback(c)) return CANCEL;
-          const photo = c.message?.photo;
-          if (photo && photo.length > 0) {
-            return { fileId: photo[photo.length - 1].file_id };
-          }
-          const doc = c.message?.document;
-          if (doc) return { fileId: doc.file_id };
+          const data = c.callbackQuery?.data;
+          if (data === "branding:print") return "screen_print";
+          if (data === "branding:embroidery") return "embroidery";
+          if (data === "back") return "back";
           return undefined;
         },
-        (c) => c.reply(COPY.logoUploadPrompt),
+        (c) => c.reply(COPY.genericReprompt),
       );
-      if (logoUploadResult === CANCEL) return abandon();
-
-      draft.logos.push({ fileId: logoUploadResult.fileId, placement: placementResult });
+      if (brandingResult === CANCEL) return abandon();
+      if (brandingResult === "back") {
+        draft.catalogSelection = undefined;
+        draft.colorName = undefined;
+        await persist();
+        return orderFlow(conversation, ctx);
+      }
+      draft.printMethod = brandingResult;
       await persist();
+    }
 
-      if (draft.logos.length < 3) {
-        await ctx.reply(COPY.addAnotherLogoAsk(draft.logos.length), { reply_markup: addAnotherLogoMenu() });
-        const continueChoice = await waitForStep<"more" | "done">(
+    // ---- Step 9: Branding position + logo upload (up to 3) ----
+    if (draft.logoReceived === undefined) {
+      draft.logos = draft.logos ?? [];
+      let addingMore = true;
+
+      while (addingMore && draft.logos.length < 3) {
+        await ctx.reply(COPY.placementAsk, { reply_markup: logoPlacementMenu() });
+        const placementResult = await waitForStep<LogoPlacement | "skip" | "back">(
           conversation,
           (c) => {
             if (isCancelCallback(c)) return CANCEL;
             const data = c.callbackQuery?.data;
-            if (data === "logo:more") return "more";
-            if (data === "logo:done") return "done";
+            if (data === "logo:skip") return "skip";
+            if (data === "back") return "back";
+            if (!data?.startsWith("placement:")) return undefined;
+            return data.slice("placement:".length) as LogoPlacement;
+          },
+          (c) => c.reply(COPY.genericReprompt),
+        );
+        if (placementResult === CANCEL) return abandon();
+        if (placementResult === "back") {
+          draft.printMethod = undefined;
+          draft.logos = [];
+          await persist();
+          return orderFlow(conversation, ctx);
+        }
+        if (placementResult === "skip") {
+          addingMore = false;
+          break;
+        }
+
+        await ctx.reply(COPY.logoUploadPrompt, { reply_markup: backAndCancelMenu() });
+        const uploadResult = await waitForStep<{ fileId: string; mimeType: string } | "back">(
+          conversation,
+          (c) => {
+            if (isCancelCallback(c)) return CANCEL;
+            if (c.callbackQuery?.data === "back") return "back";
+            const photo = c.message?.photo;
+            if (photo && photo.length > 0) {
+              const best = photo[photo.length - 1];
+              return { fileId: best.file_id, mimeType: "image/jpeg" };
+            }
+            const doc = c.message?.document;
+            if (doc && doc.mime_type && ["image/png", "image/jpeg", "image/webp"].includes(doc.mime_type)) {
+              return { fileId: doc.file_id, mimeType: doc.mime_type };
+            }
             return undefined;
           },
           (c) => c.reply(COPY.genericReprompt),
         );
-        if (continueChoice === CANCEL) return abandon();
-        addingMore = continueChoice === "more";
-      } else {
-        addingMore = false;
-      }
-    }
+        if (uploadResult === CANCEL) return abandon();
+        if (uploadResult === "back") {
+          continue;
+        }
 
-    draft.logoReceived = (draft.logos?.length ?? 0) > 0;
-    await persist();
+        draft.logos.push({
+          placement: placementResult,
+          fileId: uploadResult.fileId,
+        });
+        await persist();
+
+        if (draft.logos.length < 3) {
+          await ctx.reply(COPY.addAnotherLogoAsk(draft.logos.length), { reply_markup: addAnotherLogoMenu() });
+          const continueChoice = await waitForStep<"more" | "done">(
+            conversation,
+            (c) => {
+              if (isCancelCallback(c)) return CANCEL;
+              const data = c.callbackQuery?.data;
+              if (data === "logo:more") return "more";
+              if (data === "logo:done") return "done";
+              return undefined;
+            },
+            (c) => c.reply(COPY.genericReprompt),
+          );
+          if (continueChoice === CANCEL) return abandon();
+          addingMore = continueChoice === "more";
+        } else {
+          addingMore = false;
+        }
+      }
+
+      draft.logoReceived = (draft.logos?.length ?? 0) > 0;
+      await persist();
+    }
   }
 
   // ---- Assemble Order Data ----
-  const garment = computeGarmentTotal(tier, productId, qty);
-  const printEstimate = computePrintEstimate(draft.printMethod!, qty);
-  const grandEstimate = computeGrandEstimate(garment.total, printEstimate);
-  const advanceDue = computeAdvanceDue(garment.total);
+  const tier = draft.tier ?? "standard";
+  const productId: ProductId =
+    draft.productId ?? (draft.garmentSilhouette === "collar" ? "dry_fit_polo" : "dry_fit_round_neck");
+  const isSample = draft.orderType === "sample";
+  const garment = isSample
+    ? computeSampleKitTotal(draft.fabric ?? "polyester")
+    : computeGarmentTotal(tier, productId, qty);
+  const printEstimate = isSample ? { low: 0, high: 0 } : computePrintEstimate(draft.printMethod!, qty);
+  const grandEstimate = isSample
+    ? { low: garment.total, high: garment.total }
+    : computeGrandEstimate(garment.total, printEstimate);
+  const advanceDue = computeAdvanceDue(garment.total, { orderType: draft.orderType });
 
   if (!draft.orderId) {
     draft.orderId = await conversation.external(() => nextOrderId());
@@ -414,6 +515,7 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
   const order: OrderData = {
     orderId: draft.orderId!,
     status: "Pending Payment",
+    orderType: draft.orderType,
     tier,
     productId,
     catalogSelection: draft.catalogSelection,
@@ -441,18 +543,25 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
   // ---- Step 10: Mockup step (AFTER logo upload, BEFORE payment) ----
   if (order.logoReceived && order.logos.length > 0) {
     await ctx.reply(COPY.mockupOfferAsk, { reply_markup: generateMockupMenu(), parse_mode: "Markdown" });
-    const mockupChoice = await waitForStep<"generate" | "skip">(
+    const mockupChoice = await waitForStep<"generate" | "skip" | "back">(
       conversation,
       (c) => {
         if (isCancelCallback(c)) return CANCEL;
         const data = c.callbackQuery?.data;
         if (data === "mockup:generate") return "generate";
         if (data === "mockup:skip") return "skip";
+        if (data === "back") return "back";
         return undefined;
       },
       (c) => c.reply(COPY.genericReprompt),
     );
     if (mockupChoice === CANCEL) return abandon();
+    if (mockupChoice === "back") {
+      draft.logoReceived = undefined;
+      draft.logos = [];
+      await persist();
+      return orderFlow(conversation, ctx);
+    }
     if (mockupChoice === "generate") {
       await ctx.reply(COPY.mockupGeneratingNote);
       await conversation.external(async () => {
@@ -464,7 +573,7 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
 
   // ---- S11 Payment ----
   await ctx.reply(renderQuoteCard(order), {
-    reply_markup: quoteCardMenu(advanceDue, showsCallMe(qty)),
+    reply_markup: quoteCardMenu(advanceDue, showsCallMe(qty), isSample),
     parse_mode: "Markdown",
   });
 
@@ -499,7 +608,7 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
   );
 
   await ctx.replyWithPhoto(new InputFile(qrPng, `upi-${order.orderId}.png`), {
-    caption: COPY.paymentIntro(`₹${advanceDue.toLocaleString("en-IN")}`),
+    caption: COPY.paymentIntro(`₹${advanceDue.toLocaleString("en-IN")}`, isSample),
     parse_mode: "Markdown",
     reply_markup: paymentScreenMenu(),
   });

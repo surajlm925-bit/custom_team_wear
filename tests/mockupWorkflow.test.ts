@@ -208,10 +208,21 @@ test("paid path (quota exhausted) returns payment-required and generates NOTHING
 
   assert.equal(outcome.kind, "payment-required");
   if (outcome.kind === "payment-required") {
-    assert.equal(outcome.amountInr, 20);
+    assert.equal(outcome.amountInr, 10, "single view extra mockup is ₹10");
   }
   assert.equal(d.providerCalls(), 0, "paid path must not generate before approval");
   assert.equal(d.uploads.length, 0, "paid path must not upload before approval");
+
+  // Also verify front+back paid request is ₹20
+  const paidBothOrder = legacyOrder({ orderId: "CTW-260815-15", customerChatId: chat }, [
+    { fileId: "logo-f", placement: "left_chest" },
+    { fileId: "logo-b", placement: "upper_back" },
+  ]);
+  const outcomeBoth = await startMockupGeneration(paidBothOrder, d);
+  assert.equal(outcomeBoth.kind, "payment-required");
+  if (outcomeBoth.kind === "payment-required") {
+    assert.equal(outcomeBoth.amountInr, 20, "front+back extra mockup is ₹20");
+  }
 
   const rec = await loadGeneration(paidOrder.orderId);
   assert.equal(rec?.status, "awaiting_payment");

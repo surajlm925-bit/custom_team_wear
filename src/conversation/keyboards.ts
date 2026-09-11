@@ -22,8 +22,18 @@ export function greetingOrderTypeMenu(): InlineKeyboard {
   return new InlineKeyboard()
     .text("📦 Bulk Order (50+ pcs)", "order:bulk")
     .row()
-    .text("🧪 Trial Sample (1–5 pcs)", "order:sample")
+    .text("🧪 Trial Sample Kit (3 pcs)", "order:sample")
     .row()
+    .text("❌ Cancel", "cancel");
+}
+
+export function sampleKitFabricMenu(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("⚡ Polyester Kit — ₹1,999 total", "fabric:polyester")
+    .row()
+    .text("🌿 Cotton Kit — ₹2,499 total", "fabric:cotton")
+    .row()
+    .text("🔙 Back", "back")
     .text("❌ Cancel", "cancel");
 }
 
@@ -127,7 +137,10 @@ export function timelineMenu(): InlineKeyboard {
     .row()
     .text("🚚 Standard — 8–15 days", "timeline:standard")
     .row()
-    .text("🗓 Flexible — 15+ days", "timeline:flexible");
+    .text("🗓 Flexible — 15+ days", "timeline:flexible")
+    .row()
+    .text("🔙 Back", "back")
+    .text("❌ Cancel", "cancel");
 }
 
 export function logoPlacementMenu(): InlineKeyboard {
@@ -135,7 +148,8 @@ export function logoPlacementMenu(): InlineKeyboard {
   LOGO_PLACEMENTS.forEach((placement, i) => {
     kb.text(`${i + 1}️⃣ ${placement.label}`, `placement:${placement.id}`).row();
   });
-  kb.text("⏭ Skip — no artwork yet", "logo:skip");
+  kb.text("⏭ Skip — no artwork yet", "logo:skip").row();
+  kb.text("🔙 Back", "back").text("❌ Cancel", "cancel");
   return kb;
 }
 
@@ -151,11 +165,17 @@ export function generateMockupMenu(): InlineKeyboard {
   return new InlineKeyboard()
     .text("🎨 Generate my mockup", "mockup:generate")
     .row()
-    .text("⏭ Skip — go to my quote", "mockup:skip");
+    .text("⏭ Skip — go to my quote", "mockup:skip")
+    .row()
+    .text("🔙 Back", "back")
+    .text("❌ Cancel", "cancel");
 }
 
-export function quoteCardMenu(advanceDue: number, showCallMe: boolean): InlineKeyboard {
-  const kb = new InlineKeyboard().text(`💳 Pay ₹${advanceDue.toLocaleString("en-IN")} garment advance`, "pay");
+export function quoteCardMenu(advanceDue: number, showCallMe: boolean, isSample = false): InlineKeyboard {
+  const label = isSample
+    ? `💳 Pay ₹${advanceDue.toLocaleString("en-IN")} (full payment)`
+    : `💳 Pay ₹${advanceDue.toLocaleString("en-IN")} garment advance`;
+  const kb = new InlineKeyboard().text(label, "pay");
   if (showCallMe) {
     kb.row().text("📞 Call Me", "callme");
   }
@@ -168,6 +188,10 @@ export function paymentScreenMenu(): InlineKeyboard {
 
 export function cancelOnlyMenu(): InlineKeyboard {
   return new InlineKeyboard().text("❌ Cancel", "cancel");
+}
+
+export function backAndCancelMenu(): InlineKeyboard {
+  return new InlineKeyboard().text("🔙 Back", "back").text("❌ Cancel", "cancel");
 }
 
 // ---------------------------------------------------------------------

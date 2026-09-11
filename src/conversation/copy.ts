@@ -17,6 +17,16 @@ export const COPY = {
 
   fabricAsk: "Select fabric material:",
 
+  sampleKitFabricAsk:
+    "🧪 **Trial Sample Kit (3 Pieces)**\n\n" +
+    "We send you **3 shirts** — 1 from each quality level:\n" +
+    "• 1× Value Quality\n" +
+    "• 1× Recommended Quality\n" +
+    "• 1× Premium Quality\n\n" +
+    "Select your preferred fabric material:\n" +
+    "⚡ **Polyester Kit**: ₹1,999 total (all 3 shirts)\n" +
+    "🌿 **Cotton Kit**: ₹2,499 total (all 3 shirts)",
+
   brandingTypeAsk: "How would you like your branding done on the garment?",
 
   qtyAskSample: "How many trial sample pieces would you like? (1–5 pieces):",
@@ -90,11 +100,16 @@ export const COPY = {
 
   callMeAck: "Got it! Our senior team will call you within a few hours about your large order. 📞",
 
-  paymentIntro: (advanceDue: string) =>
-    `Here's your secure UPI link for **exactly ${advanceDue}** — that's your **garment advance (about 50% of the garment value)**, amount pre-filled with your Order ID attached automatically.\n\n` +
-    "Scan & pay with any UPI app 👇\n" +
-    "✅ Paid? Send us a **screenshot** here.\n" +
-    "⏱ Not now? Reply /start anytime — your quote details are safe.",
+  paymentIntro: (advanceDue: string, isSample = false) =>
+    isSample
+      ? `Here's your secure UPI link for **exactly ${advanceDue}** — that's your **full payment for the 3-piece Trial Sample Kit**, amount pre-filled with your Order ID attached automatically.\n\n` +
+        "Scan & pay with any UPI app 👇\n" +
+        "✅ Paid? Send us a **screenshot** here.\n" +
+        "⏱ Not now? Reply /start anytime — your quote details are safe."
+      : `Here's your secure UPI link for **exactly ${advanceDue}** — that's your **garment advance (about 50% of the garment value)**, amount pre-filled with your Order ID attached automatically.\n\n` +
+        "Scan & pay with any UPI app 👇\n" +
+        "✅ Paid? Send us a **screenshot** here.\n" +
+        "⏱ Not now? Reply /start anytime — your quote details are safe.",
 
   screenshotAck: "Thanks! Verifying now — you'll get confirmation shortly. 🔍",
 
@@ -123,10 +138,12 @@ export const COPY = {
     "🎨 Heads up: we couldn't generate an automatic preview mockup for your exact selected garment this time. " +
     "No problem at all — our design team will prepare your artwork proof manually and share it with you before production. Your order is confirmed and moving ahead. 🙌",
 
-  /** Paid mockup workflow — shown when the customer's free monthly quota is used up. */
-  mockupPaidRequired: (priceInr: number, freePerMonth: number) =>
-    `🎨 You've used all ${freePerMonth} free mockup previews for this month.\n\n` +
-    `Extra previews are **₹${priceInr} each**. To get this one, please send **₹${priceInr}** to our UPI and reply here with the **payment screenshot** — our team will approve it and your mockup will follow shortly. 🙏`,
+  /** Paid mockup workflow — shown when the customer's free quota is used up. */
+  mockupPaidRequired: (priceInr: number, freeCount: number = 1) =>
+    `🎨 You've already used your ${freeCount} free mockup preview.\n\n` +
+    `Extra previews are **₹10** for a single view and **₹20** if both front and back logos are requested.\n` +
+    `Amount due for this preview: **₹${priceInr}**.\n\n` +
+    `To generate this preview, please send **₹${priceInr}** to our UPI and reply here with the **payment screenshot** — our team will verify it and your mockup will follow shortly. 🙏`,
 
   mockupPaidProofAck:
     "Thanks! We've received your payment proof for the extra mockup — our team is verifying it now and your preview will follow once approved. 🔍",

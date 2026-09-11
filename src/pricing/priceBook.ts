@@ -114,7 +114,8 @@ export type PrintMethod =
   | "dtf"
   | "sublimation"
   | "embroidery"
-  | "not_sure";
+  | "not_sure"
+  | "none";
 
 export interface PrintMethodEntry {
   id: PrintMethod;
@@ -155,11 +156,27 @@ export const PRINT_METHODS: PrintMethodEntry[] = [
     range: [25, 120],
     hint: "Agent recommends after artwork review.",
   },
+  {
+    id: "none",
+    label: "Plain (No Print)",
+    range: [0, 0],
+    hint: "Plain blank sample garments.",
+  },
 ];
 
 export const MOQ = 50;
 export const BRACKET_THRESHOLD = 100;
 export const HIGH_VALUE_CALLOUT_QTY = 300;
+
+export const SAMPLE_KIT_PRICES = {
+  polyester: 1999,
+  cotton: 2499,
+} as const;
+
+export const MOCKUP_PRICES = {
+  singleView: 10,
+  frontAndBack: 20,
+} as const;
 
 /**
  * Logo placement options — per client's Logo Placement Flow spec

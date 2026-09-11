@@ -54,7 +54,7 @@ export interface Env {
 }
 
 const DEFAULT_MOCKUP_PAID_PRICE_INR = 20;
-const DEFAULT_MOCKUP_FREE_PER_MONTH = 3;
+const DEFAULT_MOCKUP_FREE_PER_MONTH = 1;
 
 function optionalPositiveInt(name: string, fallback: number): number {
   const raw = process.env[name];

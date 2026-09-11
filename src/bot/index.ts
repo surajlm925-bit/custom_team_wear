@@ -77,6 +77,21 @@ export function getBot(): Bot<MyContext> {
   );
 
   bot.use(conversations({ storage: { type: "key", adapter: createRedisStorage("conv:") } }));
+  // Intercept /start before conversation replay middleware.
+  // In @grammyjs/conversations, active conversations intercept all updates
+  // (including commands) before downstream handlers run. By exiting the
+  // active conversation here, the update falls through cleanly to
+  // bot.command("start") to enter a fresh/resume order flow.
+  bot.use(async (ctx, next) => {
+    const text = ctx.message?.text?.trim();
+    if (text === "/start" || text?.startsWith("/start ") || ctx.hasCommand?.("start")) {
+      const active = ctx.conversation.active("orderFlow");
+      if (active > 0) {
+        await ctx.conversation.exit("orderFlow");
+      }
+    }
+    await next();
+  });
   bot.use(createConversation(orderFlow, "orderFlow"));
 
   registerAdminActions(bot);

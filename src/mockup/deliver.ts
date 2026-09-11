@@ -242,7 +242,7 @@ export async function deliverMockupForOrder(
     }
     // SUCCESS commits the free slot (idempotent; no-op for paid). Only a
     // successful, durably-stored, delivered generation consumes quota.
-    await commitFreeGeneration(order.customerChatId, order.orderId).catch((err) =>
+    await commitFreeGeneration(order.customerChatId, order.orderId, { phone: order.phone }).catch((err) =>
       console.error(`Could not commit free quota for ${order.orderId}:`, err),
     );
     return { delivered: true, urls };

@@ -50,6 +50,12 @@ test("advance due uses Math.ceil so odd totals never under-collect", () => {
   assert.equal(computeAdvanceDue(28721), 14361); // ceil(14360.5)
 });
 
+test("trial sample kit collects full 100% payment (₹1,999 polyester, ₹2,499 cotton)", () => {
+  assert.equal(computeAdvanceDue(1999, { orderType: "sample" }), 1999);
+  assert.equal(computeAdvanceDue(2499, { orderType: "sample" }), 2499);
+  assert.equal(computeAdvanceDue(1999, { orderType: "bulk" }), 1000);
+});
+
 test("print estimate range scales with qty", () => {
   const estimate = computePrintEstimate("dtf", 80);
   assert.deepEqual(estimate, { low: 80 * 35, high: 80 * 70 });

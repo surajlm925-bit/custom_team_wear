@@ -152,6 +152,7 @@ export interface SizeSplit extends Record<SizeKey, number> {}
 export interface OrderData {
   orderId: string;
   status: OrderStatus;
+  orderType?: "bulk" | "sample";
   tier: Tier;
   productId: ProductId;
   /** The exact catalog brand/style/colour the customer confirmed (PDF-driven catalog selection flow). Optional so pre-existing orders created before this feature continue to load/validate unchanged. */

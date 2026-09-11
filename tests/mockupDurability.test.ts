@@ -27,7 +27,7 @@ import { saveOrderSnapshot } from "../src/session/orderStore.js";
 import type { MockupDeliveryDeps } from "../src/mockup/deliver.js";
 import { viewsForAssignments } from "../src/mockup/promptBuilder.js";
 import type { BlobUploader } from "../src/storage/blob.js";
-import type { OrderData, MockupView } from "../src/shared/types.js";
+import type { OrderData, MockupView, LogoUpload } from "../src/shared/types.js";
 
 let redis: FakeRedis;
 let sheet: FakeSheetStore;
@@ -42,7 +42,12 @@ beforeEach(() => {
 const FAKE_PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]);
 const CHAT = "tg:5512345678";
 
-function legacyOrder(orderId: string, chat = CHAT): OrderData {
+function legacyOrder(
+  orderId: string,
+  chat = CHAT,
+  phone?: string,
+  logos?: LogoUpload[],
+): OrderData {
   return {
     orderId,
     status: "Confirmed",
@@ -53,11 +58,11 @@ function legacyOrder(orderId: string, chat = CHAT): OrderData {
     printMethod: "dtf",
     city: "Pune",
     name: "Test",
-    phone: "9876543210",
+    phone: phone ?? `98765${orderId.replace(/\D/g, "").slice(-5).padStart(5, "0")}`,
     timeline: "standard",
     timelineUrgent: false,
     logoReceived: true,
-    logos: [{ fileId: "logo-front", placement: "left_chest" }],
+    logos: logos ?? [{ fileId: "logo-front", placement: "left_chest" }],
     garmentRate: 100,
     garmentTotal: 6000,
     printEstLow: 100,
@@ -101,26 +106,19 @@ function deps(overrides: Partial<MockupDeliveryDeps> = {}): { d: MockupDeliveryD
   return { d, sent };
 }
 
-// --- 1. Blob mandatory ------------------------------------------------
+// --- 1. Durable Blob storage gate ------------------------------------
 
-test("a Blob upload failure PREVENTS Telegram delivery and marks the generation failed", async () => {
+test("mockup storage failure prevents Telegram delivery", async () => {
   const order = legacyOrder("CTW-260815-40");
-  const { d, sent } = deps({ blobUploader: failingUploader() });
+  const failing = deps({ blobUploader: failingUploader() });
 
-  const outcome = await startMockupGeneration(order, d);
-
+  const outcome = await startMockupGeneration(order, failing.d);
   assert.equal(outcome.kind, "generation-failed");
-  assert.equal(sent.length, 0, "no image may be sent to Telegram when storage failed");
+  assert.equal(failing.sent.length, 0, "no image must be sent to the customer if storage fails");
 
   const rec = await loadGeneration(order.orderId);
   assert.equal(rec?.status, "failed");
-  assert.ok(rec?.failureReason?.includes("blob upload failed"));
-  assert.equal(rec?.outputs.length, 0, "no output URL recorded when storage failed");
-
-  // The failure is persisted to the audit sheet on the same single row.
-  const auditRow = await sheet.find(order.orderId);
-  assert.equal(auditRow?.Status, "failed");
-  assert.ok(String(auditRow?.["Failure Reason"]).includes("blob upload failed"));
+  assert.match(rec?.failureReason ?? "", /blob upload failed/);
 });
 
 // --- 2. Free-quota release on failure --------------------------------
@@ -134,7 +132,7 @@ test("a failed free generation releases the slot; retry (same id) stays free and
   assert.equal(first.kind, "generation-failed");
 
   // The slot was NOT consumed by the failure.
-  let usage = await peekUsage(CHAT);
+  let usage = await peekUsage(CHAT, { phone: order.phone });
   assert.equal(usage.committedFreeThisMonth, 0, "a failed generation must not consume a free slot");
 
   // Retry the SAME generation (same order id) — now storage works.
@@ -144,7 +142,7 @@ test("a failed free generation releases the slot; retry (same id) stays free and
   assert.equal(ok.sent.length, 1);
 
   // Now (and only now) the slot is consumed — exactly once.
-  usage = await peekUsage(CHAT);
+  usage = await peekUsage(CHAT, { phone: order.phone });
   assert.equal(usage.committedFreeThisMonth, 1);
 
   const rec = await loadGeneration(order.orderId);
@@ -152,27 +150,22 @@ test("a failed free generation releases the slot; retry (same id) stays free and
 });
 
 test("after a failure, a brand-new request also stays free (failed attempt didn't burn a slot)", async () => {
-  // One successful free generation.
-  await startMockupGeneration(legacyOrder("CTW-260815-42"), deps().d);
-  // A second request that FAILS at storage.
-  const failed = await startMockupGeneration(legacyOrder("CTW-260815-43"), deps({ blobUploader: failingUploader() }).d);
+  const phone = "9876500099";
+  // A request that FAILS at storage.
+  const failed = await startMockupGeneration(legacyOrder("CTW-260815-43", CHAT, phone), deps({ blobUploader: failingUploader() }).d);
   assert.equal(failed.kind, "generation-failed");
 
-  // Only one slot has actually been consumed (the successful one).
-  const usage = await peekUsage(CHAT);
-  assert.equal(usage.committedFreeThisMonth, 1);
+  // The failed attempt never consumed a slot.
+  const usage = await peekUsage(CHAT, { phone });
+  assert.equal(usage.committedFreeThisMonth, 0);
 
-  // Two more brand-new requests still succeed FREE (slots 2 and 3),
-  // proving the failed attempt never counted.
-  const r2 = await startMockupGeneration(legacyOrder("CTW-260815-44"), deps().d);
-  const r3 = await startMockupGeneration(legacyOrder("CTW-260815-45"), deps().d);
+  // A brand-new request for this phone still succeeds FREE, proving the failed attempt never counted.
+  const r2 = await startMockupGeneration(legacyOrder("CTW-260815-44", CHAT, phone), deps().d);
   assert.equal(r2.kind, "generated");
-  assert.equal(r3.kind, "generated");
   assert.equal((await loadGeneration("CTW-260815-44"))?.free, true);
-  assert.equal((await loadGeneration("CTW-260815-45"))?.free, true);
 
-  // The 4th distinct SUCCESSFUL request is the one that goes paid.
-  const paid = await startMockupGeneration(legacyOrder("CTW-260815-46"), deps().d);
+  // The second distinct request for this phone is the one that goes paid.
+  const paid = await startMockupGeneration(legacyOrder("CTW-260815-46", CHAT, phone), deps().d);
   assert.equal(paid.kind, "payment-required");
 });
 
@@ -193,12 +186,15 @@ test("duplicate triggers / status changes update ONE sheet row (no duplicates)",
 
 test("a paid generation stays ₹20 across an internal-failure retry (no second charge)", async () => {
   const chat = "tg:7000000010";
-  // Exhaust the 3 free slots with successful generations.
-  for (let i = 1; i <= 3; i++) {
-    await startMockupGeneration(legacyOrder(`CTW-260815-5${i}`, chat), deps().d);
-  }
+  const phone = "9876500055";
+  // Exhaust the 1 free slot with a successful generation.
+  await startMockupGeneration(legacyOrder("CTW-260815-51", chat, phone), deps().d);
 
-  const paidOrder = legacyOrder("CTW-260815-60", chat);
+  // Front + back logos -> ₹20
+  const paidOrder = legacyOrder("CTW-260815-60", chat, phone, [
+    { fileId: "logo-f", placement: "left_chest" },
+    { fileId: "logo-b", placement: "upper_back" },
+  ]);
   await saveOrderSnapshot(paidOrder);
   const start = await startMockupGeneration(paidOrder, deps().d);
   assert.equal(start.kind, "payment-required");

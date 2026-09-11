@@ -24,3 +24,6 @@ test-mockup-output-*.png
 # Source catalog PDFs and raw image folders (2.5GB local source assets)
 quality/
 
+# Test output directories
+mockup-test-output/
+

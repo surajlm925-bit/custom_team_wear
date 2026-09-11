@@ -61,20 +61,35 @@ export function renderQuoteCard(order: OrderData): string {
   const printMethod = getPrintMethod(order.printMethod);
   const productLabel = product.label[order.tier];
   const tierLabel = TIER_LABELS[order.tier];
+  const isSample = order.orderType === "sample";
 
   const lines = [
     `🧾 **Your Estimate** · #${order.orderId}`,
-    `${tierLabel} · ${productLabel} · ${order.qty} pcs`,
+    isSample
+      ? `🧪 Trial Sample Kit (3 pcs: 1 Value + 1 Recommended + 1 Premium)`
+      : `${tierLabel} · ${productLabel} · ${order.qty} pcs`,
     catalogSelectionLine(order),
     "─────────────────────",
-    `👕 Garment: ${order.qty} × ${formatRupees(order.garmentRate)} = **${formatRupees(order.garmentTotal)}**`,
-    `🖼 Printing (${printMethod.label}): ${order.qty} × ₹${printMethod.range[0]}–${printMethod.range[1]} = **${formatRupees(order.printEstLow)} – ${formatRupees(order.printEstHigh)}**`,
-    "　　⚠️ *estimate — finalized after you approve the artwork*",
+    isSample
+      ? `👕 Garments (3 pcs Sample Kit · Plain): **${formatRupees(order.garmentTotal)}**`
+      : `👕 Garment: ${order.qty} × ${formatRupees(order.garmentRate)} = **${formatRupees(order.garmentTotal)}**`,
+    isSample
+      ? ""
+      : `🖼 Printing (${printMethod.label}): ${order.qty} × ₹${printMethod.range[0]}–${printMethod.range[1]} = **${formatRupees(order.printEstLow)} – ${formatRupees(order.printEstHigh)}**`,
+    isSample
+      ? ""
+      : "　　⚠️ *estimate — finalized after you approve the artwork*",
     "─────────────────────",
-    `**Est. Total: ${formatRupees(order.grandEstLow)} – ${formatRupees(order.grandEstHigh)} (+GST)**`,
+    isSample
+      ? `**Total: ${formatRupees(order.garmentTotal)} (All-Inclusive)**`
+      : `**Est. Total: ${formatRupees(order.grandEstLow)} – ${formatRupees(order.grandEstHigh)} (+GST)**`,
     "",
-    `💳 **Pay today (garment advance ≈ 50%): ${formatRupees(order.advanceDue)}**`,
-    "Remaining garment balance + printing + GST invoiced after artwork approval — before production begins. **No hidden charges.**",
+    isSample
+      ? `💳 **Pay today (100% full payment): ${formatRupees(order.advanceDue)}**`
+      : `💳 **Pay today (garment advance ≈ 50%): ${formatRupees(order.advanceDue)}**`,
+    isSample
+      ? "Sample kit will be dispatched to your delivery address once payment is verified."
+      : "Remaining garment balance + printing + GST invoiced after artwork approval — before production begins. **No hidden charges.**",
   ].filter((l) => l !== "");
   return lines.join("\n");
 }
@@ -84,15 +99,20 @@ export function renderAdminCard(order: OrderData): string {
   const product = getProduct(order.productId);
   const productLabel = product.label[order.tier];
   const tierLabel = TIER_LABELS[order.tier];
+  const isSample = order.orderType === "sample";
 
   const lines = [
     "🛒 **NEW ORDER — PENDING PAYMENT VERIFICATION**",
     "─────────────────",
-    `\`${order.orderId}\` · ${tierLabel} · ${productLabel} · ${order.qty} pcs`,
+    `\`${order.orderId}\` · ${isSample ? "🧪 Trial Sample Kit (3 pcs: 1 Value + 1 Recommended + 1 Premium · Plain)" : `${tierLabel} · ${productLabel} · ${order.qty} pcs`}`,
     catalogSelectionAdminLine(order),
     `Sizes: ${sizeSplitLine(order)}`,
-    `Print: ${getPrintMethod(order.printMethod).label} · Placement: ${placementLabel(order)} · Timeline: ${timelineLabel(order)} · City: ${order.city}`,
-    `Garment ${formatRupees(order.garmentTotal)} · Est. print ${formatRupees(order.printEstLow)}–${formatRupees(order.printEstHigh)} · Advance due (≈50%) **${formatRupees(order.advanceDue)}**`,
+    isSample
+      ? `Timeline: ${timelineLabel(order)} · City: ${order.city}`
+      : `Print: ${getPrintMethod(order.printMethod).label} · Placement: ${placementLabel(order)} · Timeline: ${timelineLabel(order)} · City: ${order.city}`,
+    isSample
+      ? `Garment ${formatRupees(order.garmentTotal)} · Total (100%) **${formatRupees(order.advanceDue)}**`
+      : `Garment ${formatRupees(order.garmentTotal)} · Est. print ${formatRupees(order.printEstLow)}–${formatRupees(order.printEstHigh)} · Advance due (≈50%) **${formatRupees(order.advanceDue)}**`,
     `Customer: ${order.name} · ${order.phone} · ${order.customerChatId} · Logos: ${order.logos.length > 0 ? `${order.logos.length} received ✔` : "not provided"}`,
     "─────────────────",
   ].filter((l) => l !== "");

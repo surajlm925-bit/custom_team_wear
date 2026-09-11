@@ -33,9 +33,12 @@
 
 import { getRedis } from "../session/redisClient.js";
 import { getEnv } from "../config/env.js";
+import { computeMockupFee } from "../pricing/index.js";
+import type { MockupView } from "../shared/types.js";
 
 const IST_OFFSET_MINUTES = 5 * 60 + 30; // Asia/Kolkata is a fixed +05:30, no DST
 const MONTH_TTL_SECONDS = 40 * 24 * 60 * 60; // > 1 month so the counter survives the whole billing month
+const PHONE_QUOTA_TTL_SECONDS = 365 * 24 * 60 * 60; // 1 year for phone number quota
 
 /** Returns the Asia/Kolkata calendar-month key (YYYY-MM) for a given instant. */
 export function kolkataMonthKey(at: Date = new Date()): string {
@@ -45,15 +48,23 @@ export function kolkataMonthKey(at: Date = new Date()): string {
   return `${yyyy}-${mm}`;
 }
 
+/** Extracts clean 10-digit Indian phone number for quota lookup. */
+export function normalizePhoneForQuota(phone?: string): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, "");
+  return digits.length >= 10 ? digits.slice(-10) : digits || null;
+}
+
 /** Numeric chat id from a "tg:<id>" prefixed field, or the raw string as a fallback bucket. */
 function chatBucket(customerChatId: string): string {
   const match = /^tg:(\d+)$/.exec(customerChatId);
   return match ? match[1] : customerChatId;
 }
 
-/** Counter of SUCCESSFUL (committed) free generations for a chat this month. */
-function committedFreeKey(chatId: string, monthKey: string): string {
-  return `mockupquota:freecommitted:${chatId}:${monthKey}`;
+/** Counter key: phone-based if phone provided, otherwise per-chat month-based. */
+function quotaCounterKey(bucket: string, monthKey: string, phone?: string): string {
+  const clean = normalizePhoneForQuota(phone);
+  return clean ? `mockupquota:phone:${clean}` : `mockupquota:freecommitted:${bucket}:${monthKey}`;
 }
 
 /** Sticky free-vs-paid decision for a single generationId. */
@@ -79,6 +90,17 @@ export interface QuotaReservation {
   freeAllowance: number;
 }
 
+export interface ReserveOptions {
+  phone?: string;
+  views?: MockupView[];
+  at?: Date;
+}
+
+export interface CommitOptions {
+  phone?: string;
+  at?: Date;
+}
+
 /**
  * DECIDES whether a generation is free or paid, sticky per generationId.
  * Does NOT consume a slot — the slot is only consumed on success via
@@ -89,20 +111,25 @@ export interface QuotaReservation {
 export async function reserveGeneration(
   customerChatId: string,
   generationId: string,
-  at: Date = new Date(),
+  optionsOrDate?: ReserveOptions | Date,
 ): Promise<QuotaReservation> {
+  const at = optionsOrDate instanceof Date ? optionsOrDate : optionsOrDate?.at ?? new Date();
+  const phone = optionsOrDate instanceof Date ? undefined : optionsOrDate?.phone;
+  const views = optionsOrDate instanceof Date ? undefined : optionsOrDate?.views;
+
   const redis = getRedis();
   const env = getEnv();
   const freeAllowance = env.MOCKUP_FREE_PER_MONTH;
-  const priceInr = env.MOCKUP_PAID_PRICE_INR;
+  const priceInr = computeMockupFee(views);
   const monthKey = kolkataMonthKey(at);
   const bucket = chatBucket(customerChatId);
+  const counterKey = quotaCounterKey(bucket, monthKey, phone);
 
   // Sticky decision: replay if this generationId was already decided.
   const existing = await redis.get<QuotaReservation>(decisionKey(generationId));
   if (existing) return existing;
 
-  const committedRaw = await redis.get<number>(committedFreeKey(bucket, monthKey));
+  const committedRaw = await redis.get<number>(counterKey);
   const committedFreeThisMonth = typeof committedRaw === "number" ? committedRaw : 0;
 
   const free = committedFreeThisMonth < freeAllowance;
@@ -127,8 +154,11 @@ export async function reserveGeneration(
 export async function commitFreeGeneration(
   customerChatId: string,
   generationId: string,
-  at: Date = new Date(),
+  optionsOrDate?: CommitOptions | Date,
 ): Promise<void> {
+  const at = optionsOrDate instanceof Date ? optionsOrDate : optionsOrDate?.at ?? new Date();
+  const phone = optionsOrDate instanceof Date ? undefined : optionsOrDate?.phone;
+
   const redis = getRedis();
   const decision = await redis.get<QuotaReservation>(decisionKey(generationId));
   if (!decision || !decision.free) return; // only free generations consume a free slot
@@ -142,9 +172,10 @@ export async function commitFreeGeneration(
 
   const bucket = chatBucket(customerChatId);
   const monthKey = decision.monthKey || kolkataMonthKey(at);
-  const counterKey = committedFreeKey(bucket, monthKey);
+  const counterKey = quotaCounterKey(bucket, monthKey, phone);
   await redis.incr(counterKey);
-  await redis.expire(counterKey, MONTH_TTL_SECONDS);
+  const ttl = normalizePhoneForQuota(phone) ? PHONE_QUOTA_TTL_SECONDS : MONTH_TTL_SECONDS;
+  await redis.expire(counterKey, ttl);
 }
 
 /**
@@ -175,19 +206,22 @@ export async function releaseReservation(_generationId: string): Promise<void> {
  */
 export async function peekUsage(
   customerChatId: string,
-  at: Date = new Date(),
+  optionsOrDate?: { phone?: string; at?: Date } | Date,
 ): Promise<{ committedFreeThisMonth: number; freeAllowance: number; nextIsFree: boolean; monthKey: string; priceInr: number }> {
+  const at = optionsOrDate instanceof Date ? optionsOrDate : optionsOrDate?.at ?? new Date();
+  const phone = optionsOrDate instanceof Date ? undefined : optionsOrDate?.phone;
   const redis = getRedis();
   const env = getEnv();
   const monthKey = kolkataMonthKey(at);
   const bucket = chatBucket(customerChatId);
-  const raw = await redis.get<number>(committedFreeKey(bucket, monthKey));
+  const counterKey = quotaCounterKey(bucket, monthKey, phone);
+  const raw = await redis.get<number>(counterKey);
   const committedFreeThisMonth = typeof raw === "number" ? raw : 0;
   return {
     committedFreeThisMonth,
     freeAllowance: env.MOCKUP_FREE_PER_MONTH,
     nextIsFree: committedFreeThisMonth < env.MOCKUP_FREE_PER_MONTH,
     monthKey,
-    priceInr: env.MOCKUP_PAID_PRICE_INR,
+    priceInr: computeMockupFee(),
   };
 }
