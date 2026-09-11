@@ -57,9 +57,35 @@ const logoBuffer = await readFile(path.resolve(logoPath));
 console.log(`Generating mockup: product=${product} placement=${placement} logo=${logoPath} provider=${provider}`);
 console.log(provider === "gemini" ? "Calling Gemini (free tier)..." : "Calling OpenRouter... (this costs real credits)");
 
+const order = {
+  orderId: "CTW-TEST-AI",
+  status: "Pending Payment",
+  tier: "basic",
+  productId: product,
+  qty: 60,
+  sizeSplit: { S: 10, M: 20, L: 20, XL: 10, XXL: 0, "3XL": 0 },
+  printMethod: "dtf",
+  city: "Mumbai",
+  name: "Test User",
+  phone: "9876543210",
+  timeline: "standard",
+  timelineUrgent: false,
+  logoReceived: true,
+  logos: [{ fileId: "test", placement }],
+  garmentRate: 359,
+  garmentTotal: 21540,
+  printEstLow: 2000,
+  printEstHigh: 3000,
+  grandEstLow: 23540,
+  grandEstHigh: 24540,
+  advanceDue: 10770,
+  customerChatId: "tg:123456",
+  channel: "telegram",
+};
+
 const start = Date.now();
 const results = await generateAiMockups(
-  product,
+  order,
   [{ logoIndex: 0, placement }],
   [logoBuffer],
 );

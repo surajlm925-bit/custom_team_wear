@@ -20,7 +20,7 @@
 
 import { getEnv } from "../config/env.js";
 
-const DEFAULT_MODEL = "bytedance-seed/seedream-4.5";
+const DEFAULT_MODEL = "google/gemini-3.1-flash-lite-image";
 const OPENROUTER_IMAGES_URL = "https://openrouter.ai/api/v1/images";
 
 export interface MockupGenerationInput {
