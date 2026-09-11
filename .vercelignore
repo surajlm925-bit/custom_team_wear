@@ -1,0 +1,8 @@
+quality/
+tests/
+docs/
+scripts/
+*.log
+audit.json
+node_modules/
+.git/
