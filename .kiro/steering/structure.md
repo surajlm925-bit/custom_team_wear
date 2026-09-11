@@ -1,46 +1,67 @@
 # Project Structure
 
-## Current state
-The repo currently contains only planning documents — no source code yet:
+## Current State
+This repository is a fully implemented, click-first Telegram bot on Vercel Serverless with Upstash Redis, Google Sheets CRM, Sharp deterministic mockups, and Vercel Blob storage.
 
 ```
-custom team wear/
-├── .kiro/
-│   └── steering/          # AI assistant steering docs (this file, product.md, tech.md)
-└── docs/
-    ├── PRD-CTW-WhatsApp-Bot.md            # authoritative v1.0 spec (Telegram bot)
-    └── Project-Plan-CTW-WhatsApp-Bot.md   # superseded architecture doc
+custom team wear/app/
+├── AGENTS.md                  # Primary AI agent instructions & codebase manual
+├── README.md                  # Human developer setup and deployment instructions
+├── package.json               # Dependencies and scripts (test, typecheck, set-webhook)
+├── tsconfig.json              # TypeScript ESM configuration
+├── vercel.json                # Vercel serverless routing config
+│
+├── api/                       # Vercel Serverless Function Endpoints
+│   ├── webhook.ts             # Main Telegram webhook entry point (fast-ACK, secret check, dedupe)
+│   ├── health.ts              # Health check & feature flag deploy verification (/api/health)
+│   ├── heartbeat.ts           # Cron/uptime ping endpoint
+│   └── mockup-delivery.ts     # Asynchronous mockup delivery webhook
+│
+├── src/                       # Application Source Code
+│   ├── admin/                 # Admin operations (actions.ts, notify.ts)
+│   ├── bot/                   # Bot initialization & grammY pipeline (index.ts, context.ts)
+│   ├── catalog/               # Catalog data & resolution (index.ts, types.ts, catalog.generated.json)
+│   ├── config/                # Environment validation (env.ts), Sentry, version stamps
+│   ├── conversation/          # Interactive bot conversation flows (orderFlow.ts, keyboards.ts, copy.ts)
+│   ├── mockup/                # Garment mockup engine (composite.ts, zones.ts, quota.ts, workflow.ts)
+│   ├── pricing/               # Deterministic Pricing Engine (index.ts, priceBook.ts)
+│   ├── qr/                    # Dynamic UPI QR generation (index.ts)
+│   ├── session/               # Redis storage, state machine, locking (statusMachine.ts, redisClient.ts)
+│   ├── shared/                # Shared types, card renderer (render.ts), sanitizers (sanitize.ts)
+│   ├── sheets/                # Google Sheets CRM (client.ts, safeAppend.ts, schemas)
+│   └── storage/               # Vercel Blob permanent storage (blob.ts)
+│
+├── docs/                      # Deep-Dive System Documentation
+│   ├── ARCHITECTURE.md        # Deep-dive architecture & Mermaid data flow diagrams
+│   ├── STATE_MACHINE_AND_FLOWS.md # Conversation states & transition tables (S00–S12)
+│   ├── CATALOG_AND_MOCKUP_SYSTEM.md # Catalog extraction & Sharp compositing engine
+│   ├── CODEBASE_MAP.md        # Complete index of files, types, and functions
+│   └── DEVELOPER_CHEATSHEET.md# How-To recipes for common tasks
+│
+├── scripts/                   # Maintenance & Deployment CLI Scripts
+│   ├── set-webhook.ts         # Register Telegram webhook with secret token
+│   ├── delete-webhook.ts      # Unregister Telegram webhook
+│   ├── webhook-info.ts        # Inspect live Telegram webhook status
+│   └── generate-catalog.ts    # Re-extract catalog items from PDFs in quality/
+│
+├── tests/                     # Comprehensive Unit & Contract Tests (102+ tests)
+│   ├── pricing.test.ts        # Price calculation & MOQ verification
+│   ├── statusMachine.test.ts  # Forward-only status transition enforcement
+│   ├── sanitize.test.ts       # Formula injection sanitization tests
+│   ├── catalog.test.ts        # Catalog resolution and item lookups
+│   ├── deterministicMockup.test.ts # Sharp image compositing tests
+│   ├── mockupQuota.test.ts    # Monthly quota & Kolkata boundary tests
+│   ├── mockupWorkflow.test.ts # End-to-end mockup generation lifecycle
+│   └── support/               # FakeRedis, FakeSheetStore test doubles
+│
+├── assets/                    # Static Assets (catalog garment photos, mockup templates)
+└── quality/                   # Source Brand Catalog PDFs (Basic, Standard, Premium)
 ```
 
-## Expected structure once implementation starts
-Based on the approved architecture (grammY + Vercel + Upstash Redis + Google Sheets), a natural layout follows the "one channel-agnostic core, one adapter per channel" principle from the PRD:
-
-```
-├── api/                    # Vercel serverless function(s) — webhook entry point
-│   └── webhook.ts          # Telegram webhook handler (fast-ACK, dedupe, secret_token check)
-├── src/
-│   ├── adapters/           # Channel adapters implementing the fixed interface
-│   │   └── telegram.ts     # verifyRequest · sendMessage · sendMenu · sendImage · fetchMedia · onUpdate
-│   ├── conversation/       # grammY conversation/menu definitions per PRD §5 flow (S00–S11)
-│   ├── pricing/            # Pure functions over the PRD §6 price book — single source of pricing truth
-│   ├── session/            # Redis session read/write, state machine, status enum transitions
-│   ├── sheets/             # Google Sheets CRM writer (Orders tab)
-│   ├── qr/                 # UPI QR generation (`upi://pay` encoding)
-│   ├── admin/              # Admin card rendering + Confirm/Issue handlers
-│   └── shared/             # Shared quote/admin card renderer, sanitizers, types
-├── tests/                  # Conversation suite / contract tests (must pass for any new channel adapter)
-├── docs/                   # PRD + project plan (existing)
-└── .kiro/steering/         # AI assistant steering docs
-```
-
-## Organization principles
-- **Adapter isolation**: nothing outside `src/adapters/` may reference Telegram-specific types or APIs directly. This is what keeps a future WhatsApp adapter a drop-in addition.
-- **Pricing is centralized**: `src/pricing/` is the only place a rupee amount may be computed. No component outside it may hardcode or derive a price.
-- **Shared rendering**: the quote card (customer) and admin card must be produced by the same renderer in `src/shared/` to guarantee they can never disagree.
-- **State machine over ad hoc flags**: conversation progress lives in Redis session state (`sess:<chat_id>`) and moves through the fixed status enum (PRD §8.1) — avoid scattering conversation logic across handlers.
-- **Config-driven pricing**: price book and print-method ranges (PRD §6) should live in a single config module/file, not inline in conversation code, so it's easy to update as pricing changes.
-- **Contract tests**: any new channel adapter (e.g. future WhatsApp) must pass the same conversation test suite as the Telegram adapter before merging.
-
-## Documentation
-- Keep `docs/PRD-CTW-WhatsApp-Bot.md` as the single authoritative spec. If requirements change, update it directly rather than letting code and doc drift.
-- `docs/Project-Plan-CTW-WhatsApp-Bot.md` is historical/superseded — do not extend it; if the project plan needs updating, create a new plan aligned with the PRD's Telegram/grammY architecture.
+## Architectural Invariants
+- **Zero AI for Conversation & Pricing**: No LLMs or NLP. Every screen is a deterministic template, every price is a price book lookup.
+- **Adapter isolation**: Channel interaction details are isolated in `src/bot/` and `src/conversation/` to keep a future WhatsApp adapter portable.
+- **Pricing is centralized**: `src/pricing/` is the single computational source of truth for all monetary values.
+- **Shared rendering**: Customer quote card and admin card are produced by `renderQuoteCard()` and `renderAdminCard()` in `src/shared/render.ts`.
+- **State machine forward-only**: State moves forward only through `OrderStatus` in `src/session/statusMachine.ts`.
+- **Sanitized CRM logging**: Formula injection sanitized via `sanitizeForSpreadsheet()`.

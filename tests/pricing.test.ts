@@ -36,9 +36,18 @@ test("garment total at 100+ bracket uses discounted rate", () => {
   assert.equal(result.total, 100 * 309);
 });
 
-test("advance due equals garment total only — Option C", () => {
+test("advance due is ~50% of garment total, rounded up — ₹14,360 for 80 × ₹359", () => {
   const garment = computeGarmentTotal("standard", "dry_fit_polo", 80);
-  assert.equal(computeAdvanceDue(garment.total), garment.total);
+  assert.equal(garment.ratePerPiece, 359);
+  assert.equal(garment.total, 28720); // 80 × ₹359
+  assert.equal(computeAdvanceDue(garment.total), 14360); // ceil(28720 × 0.5)
+});
+
+test("advance due uses Math.ceil so odd totals never under-collect", () => {
+  assert.equal(computeAdvanceDue(359), 180); // ceil(179.5)
+  assert.equal(computeAdvanceDue(1), 1); // ceil(0.5)
+  assert.equal(computeAdvanceDue(28720), 14360); // exact half
+  assert.equal(computeAdvanceDue(28721), 14361); // ceil(14360.5)
 });
 
 test("print estimate range scales with qty", () => {

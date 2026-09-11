@@ -13,8 +13,7 @@ import { COPY } from "../conversation/copy.js";
 import { updateOrderRowStatus } from "../sheets/client.js";
 import { renderConfirmationDm } from "../shared/render.js";
 import { getRedis } from "../session/redisClient.js";
-import { loadOrderSnapshot } from "../session/orderStore.js";
-import { deliverMockupForOrder } from "../mockup/deliver.js";
+import { approvePaidGeneration, rejectPaidGeneration } from "../mockup/paidGeneration.js";
 
 const PROCESSED_TTL_SECONDS = 90 * 24 * 60 * 60; // long enough to safely catch duplicate presses
 
@@ -89,40 +88,67 @@ export function registerAdminActions(bot: Bot<MyContext>): void {
       const caption =
         ctx.callbackQuery.message?.caption ?? ctx.callbackQuery.message?.text ?? "";
       const chatIdMatch = /tg:(\d+)/.exec(caption);
+
       if (chatIdMatch) {
         const customerChatId = Number(chatIdMatch[1]);
         const orderIdMatch = /`(CTW-[\d-]+)`/.exec(caption);
         const displayOrderId = orderIdMatch ? orderIdMatch[1] : orderId;
+        // The mockup is now generated earlier (right after logo upload,
+        // before payment — see orderFlow.ts), so the confirmation DM no
+        // longer promises a mockup "on the way".
+        const dmText = renderConfirmationDm(displayOrderId);
         await ctx.api
-          .sendMessage(customerChatId, renderConfirmationDm(displayOrderId), {
+          .sendMessage(customerChatId, dmText, {
             parse_mode: "Markdown",
           })
           .catch((err) => console.error("Failed to DM customer on confirm", err));
       } else {
         console.error(`Could not extract customer chat id from admin card caption for order ${orderId}`);
       }
-
-      // Send the AI-rendered logo mockup to the customer. This is AWAITED
-      // deliberately: Vercel serverless functions terminate as soon as the
-      // handler returns, so a fire-and-forget call here would be killed
-      // mid-flight before the ~30-40s AI generation call completes (this
-      // is exactly what happened before this fix — the mockup silently
-      // never arrived). deliverMockupForOrder catches its own errors
-      // internally and never throws, so this never blocks/breaks
-      // confirmation even if mockup generation fails.
-      const orderSnapshot = await loadOrderSnapshot(orderId).catch(() => undefined);
-      if (orderSnapshot) {
-        await deliverMockupForOrder(orderSnapshot).catch((err) =>
-          console.error(`Unhandled error delivering mockup for ${orderId}`, err),
-        );
-      } else {
-        console.warn(`No order snapshot found for ${orderId}; skipping mockup delivery.`);
-      }
     } else {
       await updateOrderRowStatus(orderId, "Payment Issue").catch((err) => {
         console.error("Failed to update sheet on issue", err);
       });
       await ctx.answerCallbackQuery({ text: "Marked as Payment Issue 🚩" });
+      await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => {});
+    }
+  });
+
+  // Paid mockup-generation approval — gated by ADMIN_CHAT_IDS, idempotent
+  // via the generation record's forward-only state machine (a double-click
+  // Approve never regenerates or re-charges). Distinct from the order
+  // payment confirm above: this is the extra ₹20 mockup charge (#4+/month).
+  bot.callbackQuery(/^mockupgen:(approve|reject):(.+)$/, async (ctx) => {
+    const chatId = ctx.chat?.id;
+    if (!isAuthorizedAdmin(chatId)) {
+      console.warn(`Unauthorized paid-mockup action attempt from chat ${chatId}`);
+      await ctx.answerCallbackQuery({ text: COPY.adminUnauthorized, show_alert: true });
+      return;
+    }
+
+    const match = /^mockupgen:(approve|reject):(.+)$/.exec(ctx.callbackQuery.data ?? "");
+    if (!match) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+    const decision = match[1] as "approve" | "reject";
+    const generationId = match[2];
+
+    if (decision === "approve") {
+      const result = await approvePaidGeneration(generationId, chatId!);
+      if (!result.ok && !result.changed) {
+        await ctx.answerCallbackQuery({ text: result.reason ?? "Could not approve.", show_alert: true });
+        return;
+      }
+      await ctx.answerCallbackQuery({ text: result.changed ? "Approved ✅ — generating" : "Already handled" });
+      await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => {});
+    } else {
+      const result = await rejectPaidGeneration(generationId, chatId!);
+      if (!result.ok && !result.changed) {
+        await ctx.answerCallbackQuery({ text: result.reason ?? "Could not reject.", show_alert: true });
+        return;
+      }
+      await ctx.answerCallbackQuery({ text: result.changed ? "Rejected 🚩" : "Already handled" });
       await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => {});
     }
   });

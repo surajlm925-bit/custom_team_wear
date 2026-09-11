@@ -99,9 +99,17 @@ export function computeGrandEstimate(
   };
 }
 
-/** Advance due = garment total only ("Option C", PRD §7.3). EXACT. */
+/**
+ * Advance due = ~50% of the garment total, rounded UP to the nearest
+ * rupee. The garment advance secures the order; the remaining garment
+ * balance + printing + GST are invoiced later (after artwork approval,
+ * before production). Example: garment total ₹28,720 -> advance ₹14,360.
+ *
+ * Math.ceil ensures we never under-collect by a fraction of a rupee on
+ * odd totals (e.g. ₹359 → 179.5 → ₹180).
+ */
 export function computeAdvanceDue(garmentTotal: number): number {
-  return garmentTotal;
+  return Math.ceil(garmentTotal * 0.5);
 }
 
 export function showsCallMe(qty: number): boolean {

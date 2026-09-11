@@ -2,7 +2,12 @@
   "functions": {
     "api/webhook.ts": {
       "memory": 1024,
-      "maxDuration": 60
+      "maxDuration": 30,
+      "includeFiles": "assets/catalog/**"
+    },
+    "api/mockup-delivery.ts": {
+      "memory": 1024,
+      "maxDuration": 120
     },
     "api/heartbeat.ts": {
       "memory": 256,

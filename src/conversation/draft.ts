@@ -5,11 +5,16 @@
  */
 
 import type { PrintMethod, ProductId, SizeKey, Tier } from "../pricing/priceBook.js";
-import type { LogoUpload, Timeline } from "../shared/types.js";
+import type { CatalogSelection, LogoUpload, Timeline } from "../shared/types.js";
 
 export interface OrderDraft {
   tier?: Tier;
   productId?: ProductId;
+  /** Set once the customer has picked+confirmed a catalog item (and colour, if applicable). Drives productId, so productId itself is always derived from this once the catalog flow is in play. */
+  catalogSelection?: CatalogSelection;
+  /** In-progress catalog picks, cleared once catalogSelection is finalized. Lets S1 resume mid-pick (e.g. group chosen but item not yet confirmed) after a /start interruption. */
+  catalogGroupId?: string;
+  catalogItemId?: string;
   qty?: number;
   sizeSplit?: Partial<Record<SizeKey, number>>;
   printMethod?: PrintMethod;

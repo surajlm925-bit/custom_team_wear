@@ -19,7 +19,32 @@ export const COPY = {
   qtyAsk: "How many pieces do you need? *(Minimum 50)*",
   qtyInvalid: "Please send a valid number of pieces (1–100,000).",
 
-  sizeSplitAsk: (qty: number) => `How should we split your **${qty} pcs** across sizes?`,
+  catalogProductAsk: "Select a garment & fabric type:",
+  catalogQualityAsk: "Select a quality / fabric option:",
+  catalogGroupAsk: (kind: "brand" | "category") => (kind === "brand" ? "Which brand?" : "Which category?"),
+  catalogNoGroups: "Sorry, we don't have a catalog set up for this tier yet — our team will help you directly. Please use /start to try another tier, or wait for our callback.",
+  catalogItemAsk: "Pick a style:",
+  catalogNoItems: "No styles found in this category yet — going back.",
+  catalogImageConfirmAsk: (label: string) => `Here's **${label}**. Is this the one?`,
+  catalogImageMissing: (label: string) =>
+    `**${label}** — photo isn't available right now, but here are the details above. Is this the one?`,
+  catalogColorAsk: "Which colour?",
+  catalogColorConfirmAsk: (label: string, color: string) =>
+    `Here's **${label}** in **${color}**. Use this colour?`,
+  catalogColorConfirmMissing: (label: string, color: string) =>
+    `**${label}** — **${color}**. We couldn't load this colour's photo right now. Use this colour anyway?`,
+  catalogSelectionEcho: (label: string, color?: string) =>
+    color ? `✅ Selected: **${label}** — ${color}` : `✅ Selected: **${label}**`,
+  /** Shown when a whole group (e.g. Reebok, Van Heusen) has no auto-orderable items, or an item has no usable colours — routes to a human. */
+  catalogAssistedSelection:
+    "🧑‍💼 This range needs a hand from our team — the catalogue here has options we prefer to confirm with you personally (exact style, colour & availability).\n\n" +
+    "Please reach us and we'll set your order up for you. You can also send /start to pick from another range in the meantime.",
+
+  sizeSplitAsk: (qty: number) =>
+    `How should we split your **${qty} pcs** across sizes (S, M, L, XL, XXL, 3XL)?\n\n` +
+    "• **Even split** — divides your quantity as evenly as possible across all 6 sizes.\n" +
+    "• **Standard mix** — a typical team spread: S 10%, M 25%, L 30%, XL 20%, XXL 10%, 3XL 5%.\n" +
+    "• **Enter my own** — you type the exact quantity for each size.",
   sizeSplitOwnPrompt: (sizeLabel: string) => `Enter the quantity for **${sizeLabel}** (0 is allowed):`,
   sizeSplitOwnInvalid: "Please send a whole number, 0 or greater.",
   sizeSplitMismatch: (entered: number, qty: number, remaining: number) =>
@@ -54,7 +79,7 @@ export const COPY = {
   callMeAck: "Got it! Our senior team will call you within a few hours about your large order. 📞",
 
   paymentIntro: (advanceDue: string) =>
-    `Here's your secure UPI link for **exactly ${advanceDue}** — amount pre-filled, Order ID attached automatically.\n\n` +
+    `Here's your secure UPI link for **exactly ${advanceDue}** — that's your **garment advance (about 50% of the garment value)**, amount pre-filled with your Order ID attached automatically.\n\n` +
     "Scan & pay with any UPI app 👇\n" +
     "✅ Paid? Send us a **screenshot** here.\n" +
     "⏱ Not now? Reply /start anytime — your quote details are safe.",
@@ -66,6 +91,39 @@ export const COPY = {
 
   genericReprompt: "Sorry, I didn't get that. Please use one of the buttons above.",
   floodCooldown: "You're sending messages a bit fast — please slow down and try again in a moment. 🙏",
+  busyReprompt: "⏳ Still working on your last message — one moment please.",
+
+  mockupEtaNote:
+    "\n\n🎨 We're generating a preview mockup of your logo on the garment — it'll land here in a minute or two.",
+
+  /** Offered immediately after logo upload, before the quote/payment step. */
+  mockupOfferAsk:
+    "📎 Got your logo! Want to see a **preview mockup** of it on your exact selected garment now?\n\n" +
+    "Your first **3 mockups each month are free**. (Extra previews after that are ₹20 each, verified by our team.)",
+
+  mockupGeneratingNote: "🎨 Generating your preview on the exact garment you picked — one moment…",
+
+  /** Sent with the deterministic proof so the customer knows it's the real print reference. */
+  mockupProofCaption: (view: "front" | "back") =>
+    `🎨 Print proof — your logo on the exact selected garment (${view === "front" ? "front" : "back"}). This is the true placement; nothing about the shirt or logo is altered.`,
+
+  mockupUnavailable:
+    "🎨 Heads up: we couldn't generate an automatic preview mockup for your exact selected garment this time. " +
+    "No problem at all — our design team will prepare your artwork proof manually and share it with you before production. Your order is confirmed and moving ahead. 🙌",
+
+  /** Paid mockup workflow — shown when the customer's free monthly quota is used up. */
+  mockupPaidRequired: (priceInr: number, freePerMonth: number) =>
+    `🎨 You've used all ${freePerMonth} free mockup previews for this month.\n\n` +
+    `Extra previews are **₹${priceInr} each**. To get this one, please send **₹${priceInr}** to our UPI and reply here with the **payment screenshot** — our team will approve it and your mockup will follow shortly. 🙏`,
+
+  mockupPaidProofAck:
+    "Thanks! We've received your payment proof for the extra mockup — our team is verifying it now and your preview will follow once approved. 🔍",
+
+  mockupPaidApprovedNote:
+    "\n\n✅ Payment approved — generating your mockup now.",
+
+  mockupPaidRejected:
+    "😕 We couldn't verify the payment for your extra mockup. If you believe this is a mistake, please reply here and our team will help sort it out.",
 
   alreadyProcessed: "This order was already processed.",
   adminUnauthorized: "You're not authorized to perform this action.",

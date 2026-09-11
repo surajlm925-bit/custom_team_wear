@@ -33,6 +33,37 @@ export interface Env {
   MOCKUP_IMAGE_MODEL?: string;
   GEMINI_API_KEY?: string;
   MOCKUP_IMAGE_PROVIDER?: string;
+  /** Shared secret protecting the internal /api/mockup-delivery endpoint (see src/mockup/deliverTrigger.ts). Falls back to WEBHOOK_SECRET if unset. */
+  INTERNAL_MOCKUP_SECRET?: string;
+  /** Explicit override for the base URL used to call /api/mockup-delivery. Falls back to Vercel's system env vars. */
+  PUBLIC_BASE_URL?: string;
+  /**
+   * Vercel Blob read/write token — durable storage for generated mockup
+   * images (src/storage/blob.ts). When unset, generated images are still
+   * sent to Telegram but not persisted to Blob (the generation record
+   * When unset, mockup images are NOT deliverable (generation fails
+   * gracefully and escalates) — Blob storage is mandatory for proofs.
+   * Auto-populated by Vercel when a Blob store is
+   * linked; set BLOB_READ_WRITE_TOKEN locally for `vercel dev`.
+   */
+  BLOB_READ_WRITE_TOKEN?: string;
+  /** Price (in whole rupees) charged per paid mockup generation once the monthly free quota is exhausted. */
+  MOCKUP_PAID_PRICE_INR: number;
+  /** Number of free mockup generations allowed per chat per Asia/Kolkata calendar month. */
+  MOCKUP_FREE_PER_MONTH: number;
+}
+
+const DEFAULT_MOCKUP_PAID_PRICE_INR = 20;
+const DEFAULT_MOCKUP_FREE_PER_MONTH = 3;
+
+function optionalPositiveInt(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw || raw.trim() === "") return fallback;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) {
+    throw new Error(`${name} must be a non-negative integer (got "${raw}").`);
+  }
+  return n;
 }
 
 let cached: Env | undefined;
@@ -81,6 +112,11 @@ export function getEnv(): Env {
     MOCKUP_IMAGE_MODEL: optional("MOCKUP_IMAGE_MODEL"),
     GEMINI_API_KEY: optional("GEMINI_API_KEY"),
     MOCKUP_IMAGE_PROVIDER: optional("MOCKUP_IMAGE_PROVIDER"),
+    INTERNAL_MOCKUP_SECRET: optional("INTERNAL_MOCKUP_SECRET"),
+    PUBLIC_BASE_URL: optional("PUBLIC_BASE_URL"),
+    BLOB_READ_WRITE_TOKEN: optional("BLOB_READ_WRITE_TOKEN"),
+    MOCKUP_PAID_PRICE_INR: optionalPositiveInt("MOCKUP_PAID_PRICE_INR", DEFAULT_MOCKUP_PAID_PRICE_INR),
+    MOCKUP_FREE_PER_MONTH: optionalPositiveInt("MOCKUP_FREE_PER_MONTH", DEFAULT_MOCKUP_FREE_PER_MONTH),
   };
   return cached;
 }

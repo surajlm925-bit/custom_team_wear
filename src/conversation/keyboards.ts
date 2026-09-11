@@ -16,6 +16,7 @@ import {
   type SizeKey,
   type Tier,
 } from "../pricing/priceBook.js";
+import type { CatalogGroup, CatalogItem, CatalogVariant } from "../catalog/index.js";
 
 export function tierMenu(): InlineKeyboard {
   const kb = new InlineKeyboard();
@@ -106,6 +107,14 @@ export function addAnotherLogoMenu(): InlineKeyboard {
     .text("✅ No more — continue", "logo:done");
 }
 
+/** Shown right after logo upload — offers the free/paid mockup preview or skipping straight to the quote. */
+export function generateMockupMenu(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("🎨 Generate my mockup", "mockup:generate")
+    .row()
+    .text("⏭ Skip — go to my quote", "mockup:skip");
+}
+
 export function quoteCardMenu(advanceDue: number, showCallMe: boolean): InlineKeyboard {
   const kb = new InlineKeyboard().text(`💳 Pay ₹${advanceDue.toLocaleString("en-IN")} garment advance`, "pay");
   if (showCallMe) {
@@ -121,3 +130,115 @@ export function paymentScreenMenu(): InlineKeyboard {
 export function cancelOnlyMenu(): InlineKeyboard {
   return new InlineKeyboard().text("❌ Cancel", "cancel");
 }
+
+// ---------------------------------------------------------------------
+// Catalog selection flow (S1) — PDF-driven brand/style/colour picker.
+// Every page caps at PAGE_SIZE options + nav row, keeping every screen
+// within the WhatsApp-portability contract (≤10 options, ≤3 buttons/row)
+// even for brands with 30+ catalog items (e.g. Reebok, Van Heusen).
+// ---------------------------------------------------------------------
+
+const CATALOG_PAGE_SIZE = 8;
+
+function paginate<T>(list: T[], page: number): { pageItems: T[]; totalPages: number; page: number } {
+  const totalPages = Math.max(1, Math.ceil(list.length / CATALOG_PAGE_SIZE));
+  const clampedPage = Math.min(Math.max(0, page), totalPages - 1);
+  const start = clampedPage * CATALOG_PAGE_SIZE;
+  return { pageItems: list.slice(start, start + CATALOG_PAGE_SIZE), totalPages, page: clampedPage };
+}
+
+/** Adds a Prev/Next row when there's more than one page. The current
+ * page/total is communicated in the message text (see orderFlow.ts),
+ * not as a third inert button, so every button on this row stays
+ * actionable — a non-clickable label button would violate the "every
+ * decision is a button press" click-first principle for no benefit. */
+function addPageNavRow(kb: InlineKeyboard, page: number, totalPages: number, prevData: string, nextData: string): void {
+  if (totalPages <= 1) return;
+  kb.row();
+  if (page > 0) kb.text("⬅️ Prev", prevData);
+  if (page < totalPages - 1) kb.text("Next ➡️", nextData);
+}
+
+/** S1a: brand/category group picker within the chosen tier. */
+export function catalogGroupMenu(groups: CatalogGroup[], page = 0): InlineKeyboard {
+  const { pageItems, totalPages, page: p } = paginate(groups, page);
+  const kb = new InlineKeyboard();
+  for (const group of pageItems) {
+    kb.text(group.label, `catgroup:${group.id}`).row();
+  }
+  addPageNavRow(kb, p, totalPages, `catgrouppage:${p - 1}`, `catgrouppage:${p + 1}`);
+  kb.row().text("🔙 Back", "back").text("❌ Cancel", "cancel");
+  return kb;
+}
+
+/** S1b: catalog item/style picker within the chosen group. */
+export function catalogItemMenu(items: CatalogItem[], page = 0): InlineKeyboard {
+  const { pageItems, totalPages, page: p } = paginate(items, page);
+  const kb = new InlineKeyboard();
+  for (const item of pageItems) {
+    kb.text(item.label, `catitem:${item.id}`).row();
+  }
+  addPageNavRow(kb, p, totalPages, `catitempage:${p - 1}`, `catitempage:${p + 1}`);
+  kb.row().text("🔙 Back", "back").text("❌ Cancel", "cancel");
+  return kb;
+}
+
+/** S1c: confirm the rendered catalog page image actually matches what the customer wants. */
+export function catalogImageConfirmMenu(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("✅ Yes, this one", "catimg:yes")
+    .text("🔙 Choose another", "catimg:no")
+    .row()
+    .text("❌ Cancel", "cancel");
+}
+
+/** S1d: colour picker for items that have extracted colour variants. */
+export function catalogColorMenu(variants: CatalogVariant[], page = 0): InlineKeyboard {
+  const { pageItems, totalPages, page: p } = paginate(variants, page);
+  const kb = new InlineKeyboard();
+  for (const variant of pageItems) {
+    kb.text(variant.colorName, `catcolor:${variant.id}`).row();
+  }
+  addPageNavRow(kb, p, totalPages, `catcolorpage:${p - 1}`, `catcolorpage:${p + 1}`);
+  kb.row().text("🔙 Back", "back").text("❌ Cancel", "cancel");
+  return kb;
+}
+
+/** S1e: confirm the chosen colour after seeing that colour's exact product/model image. Selection is only finalized on "Use this colour". */
+export function catalogColorConfirmMenu(): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("✅ Use this colour", "catcolorconfirm:yes")
+    .row()
+    .text("🔄 Choose another colour", "catcolorconfirm:no")
+    .row()
+    .text("❌ Cancel", "cancel");
+}
+
+export function optionsQualityMenu(options: { id: string; name: string }[], page = 0): InlineKeyboard {
+  const { pageItems, totalPages, page: p } = paginate(options, page);
+  const kb = new InlineKeyboard();
+  for (const opt of pageItems) {
+    kb.text(opt.name, `optquality:${opt.id}`).row();
+  }
+  addPageNavRow(kb, p, totalPages, `optqualitypage:${p - 1}`, `optqualitypage:${p + 1}`);
+  kb.row().text("🔙 Back", "back").text("❌ Cancel", "cancel");
+  return kb;
+}
+
+export function optionsColorMenu(colors: string[], page = 0): InlineKeyboard {
+  const { pageItems, totalPages, page: p } = paginate(colors, page);
+  const kb = new InlineKeyboard();
+  for (let i = 0; i < pageItems.length; i += 2) {
+    const c1 = pageItems[i];
+    const c2 = pageItems[i + 1];
+    kb.text(c1, `optcolor:${encodeURIComponent(c1)}`);
+    if (c2) {
+      kb.text(c2, `optcolor:${encodeURIComponent(c2)}`);
+    }
+    kb.row();
+  }
+  addPageNavRow(kb, p, totalPages, `optcolorpage:${p - 1}`, `optcolorpage:${p + 1}`);
+  kb.row().text("🔙 Back", "back").text("❌ Cancel", "cancel");
+  return kb;
+}
+

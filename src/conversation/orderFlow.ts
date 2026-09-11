@@ -10,10 +10,10 @@ import {
   addAnotherLogoMenu,
   bracketRevealMenu,
   cancelOnlyMenu,
+  generateMockupMenu,
   logoPlacementMenu,
   paymentScreenMenu,
   printMethodMenu,
-  productMenu,
   quoteCardMenu,
   resumeMenu,
   sizeSplitModeMenu,
@@ -22,6 +22,7 @@ import {
 } from "./keyboards.js";
 import { CANCEL, isCancelCallback, waitForStep } from "./waitHelpers.js";
 import { collectOwnSizeSplit } from "./steps/sizeSplit.js";
+import { runCatalogSelection } from "./steps/catalogSelection.js";
 import type { MyConversation, MyConversationContext } from "./types.js";
 import {
   computeAdvanceDue,
@@ -36,7 +37,7 @@ import {
   resolveStandardMix,
   showsCallMe,
 } from "../pricing/index.js";
-import type { LogoPlacement, PrintMethod, ProductId, Tier } from "../pricing/priceBook.js";
+import type { LogoPlacement, PrintMethod, Tier } from "../pricing/priceBook.js";
 import { LOGO_PLACEMENTS } from "../pricing/priceBook.js";
 import { isValidQty, normalizeIndianPhone, sanitizeCity, sanitizeName } from "../shared/sanitize.js";
 import { renderQuoteCard } from "../shared/render.js";
@@ -44,10 +45,13 @@ import type { OrderData, Timeline } from "../shared/types.js";
 import { generateUpiQrPng } from "../qr/index.js";
 import { nextOrderId } from "../session/orderId.js";
 import { safeAppendOrderRow } from "../sheets/safeAppend.js";
+import { appendCatalogSelectionRow } from "../sheets/catalogSelections.js";
 import { getEnv } from "../config/env.js";
 import { loadDraft, saveDraft, clearDraft } from "../session/draftStore.js";
 import type { OrderDraft } from "./draft.js";
 import { notifyAdmins, notifyAdminsText } from "../admin/notify.js";
+import { saveOrderSnapshot } from "../session/orderStore.js";
+import { triggerMockupDelivery } from "../mockup/deliverTrigger.js";
 
 /** Entry point registered with createConversation(orderFlow). */
 export async function orderFlow(conversation: MyConversation, ctx: MyConversationContext) {
@@ -98,32 +102,34 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
     await persist();
   }
 
-  // ---- S1 Product menu ----
-  if (!draft.productId) {
-    await ctx.reply(`Products in this tier:`, { reply_markup: productMenu(draft.tier) });
-    const productResult = await waitForStep<ProductId | "back">(
-      conversation,
-      (c) => {
-        if (isCancelCallback(c)) return CANCEL;
-        const data = c.callbackQuery?.data;
-        if (data === "back") return "back";
-        if (!data?.startsWith("product:")) return undefined;
-        return data.slice("product:".length) as ProductId;
-      },
-      (c) => c.reply(COPY.genericReprompt),
-    );
-    if (productResult === CANCEL) return discard();
-    if (productResult === "back") {
+  // ---- S1 Catalog selection: brand/category -> style -> image confirm -> colour ----
+  if (!draft.catalogSelection) {
+    const catalogResult = await runCatalogSelection(conversation, ctx, draft, draft.tier, persist);
+    if (catalogResult === CANCEL) return discard();
+    if (catalogResult === "assisted") {
+      // Customer was routed to assisted selection (e.g. an image-only
+      // brand like Reebok/Van Heusen with no auto-orderable items). The
+      // "contact our team" message has already been sent inside
+      // runCatalogSelection; end the flow here without a redundant
+      // cancellation message. The draft is cleared so /start begins fresh.
+      return discard();
+    }
+    if (catalogResult === "back") {
       draft.tier = undefined;
+      draft.catalogGroupId = undefined;
+      draft.catalogItemId = undefined;
       await persist();
       return orderFlow(conversation, ctx);
     }
-    draft.productId = productResult;
+    draft.catalogSelection = catalogResult;
+    draft.productId = catalogResult.productId;
+    draft.catalogGroupId = undefined;
+    draft.catalogItemId = undefined;
     await persist();
   }
 
   const tier = draft.tier;
-  const productId = draft.productId;
+  const productId = draft.productId!;
 
   // ---- S2a/S2b/S2c Quantity gate + bracket reveal ----
   let qtyConfirmed = Boolean(draft.qty);
@@ -397,7 +403,9 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
     await persist();
   }
 
-  // ---- S10 Quote card ----
+  // ---- Pricing + order object (order ID is created HERE, right after
+  // logo upload, so the mockup step below can tag all assets/history to a
+  // real order id BEFORE the payment stage) ----
   const garment = computeGarmentTotal(tier, productId, qty);
   const printEstimate = computePrintEstimate(draft.printMethod!, qty);
   const grandEstimate = computeGrandEstimate(garment.total, printEstimate);
@@ -415,6 +423,7 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
     status: "Pending Payment",
     tier,
     productId,
+    catalogSelection: draft.catalogSelection,
     qty,
     sizeSplit: draft.sizeSplit as OrderData["sizeSplit"],
     printMethod: draft.printMethod!,
@@ -436,6 +445,44 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
     channel: "telegram",
   };
 
+  // ---- Mockup step (AFTER logo upload, BEFORE payment) ----
+  // Offer a preview mockup the moment we have artwork + a real order id.
+  // The mockup is generated (deterministic proof) before the customer
+  // pays their garment advance; all assets/history are tagged to
+  // order.orderId. Free for the first 3/month; #4+ goes through the
+  // ₹20 proof + admin-approval path (the customer is prompted separately).
+  if (order.logoReceived && order.logos.length > 0) {
+    await ctx.reply(COPY.mockupOfferAsk, { reply_markup: generateMockupMenu(), parse_mode: "Markdown" });
+    const mockupChoice = await waitForStep<"generate" | "skip">(
+      conversation,
+      (c) => {
+        if (isCancelCallback(c)) return CANCEL;
+        const data = c.callbackQuery?.data;
+        if (data === "mockup:generate") return "generate";
+        if (data === "mockup:skip") return "skip";
+        return undefined;
+      },
+      (c) => c.reply(COPY.genericReprompt),
+    );
+    if (mockupChoice === CANCEL) return abandon();
+    if (mockupChoice === "generate") {
+      await ctx.reply(COPY.mockupGeneratingNote);
+      // Persist the order snapshot so the mockup workflow can recover full
+      // order data by id, then DISPATCH generation to the standalone
+      // /api/mockup-delivery function (fire-and-forget). Generation is far
+      // too slow for the webhook's budget, so it must never run here. All
+      // outcomes — delivered, quota-exceeded (customer is asked for the
+      // ₹20 payment), failures — are handled and messaged by that function
+      // (see api/mockup-delivery.ts). Never reintroduce an inline
+      // startMockupGeneration() call here.
+      await conversation.external(async () => {
+        await saveOrderSnapshot(order).catch(() => {});
+        await triggerMockupDelivery(order.orderId);
+      });
+    }
+  }
+
+  // ---- S10 Quote card ----
   await ctx.reply(renderQuoteCard(order), {
     reply_markup: quoteCardMenu(advanceDue, showsCallMe(qty)),
     parse_mode: "Markdown",
@@ -459,6 +506,7 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
     await ctx.reply(COPY.callMeAck);
     await conversation.external(async () => {
       await safeAppendOrderRow({ ...order, status: "Lead — High-Value Callback" }).catch(() => {});
+      if (order.catalogSelection) await appendCatalogSelectionRow(order.orderId, order.catalogSelection);
       await notifyAdminsText(
         `📞 High-value callback requested: ${order.orderId} · ${order.name} · ${order.phone} · qty ${order.qty}`,
       );
@@ -501,6 +549,7 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
   if (paymentOutcome.type === "cancel") {
     await conversation.external(async () => {
       await safeAppendOrderRow({ ...order, status: "Lead — No Payment" }).catch(() => {});
+      if (order.catalogSelection) await appendCatalogSelectionRow(order.orderId, order.catalogSelection);
       await notifyAdminsText(`⚠️ Payment stalled: ${order.orderId} · ${order.name} · ${order.phone}`);
       await clearDraft(chatId);
     });
@@ -518,6 +567,7 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
   const sheetWriteFailed = await conversation.external(async () => {
     try {
       await safeAppendOrderRow(order);
+      if (order.catalogSelection) await appendCatalogSelectionRow(order.orderId, order.catalogSelection);
       return false;
     } catch {
       return true;
@@ -548,6 +598,7 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
         status: "Lead — Abandoned",
         tier: draft.tier!,
         productId: draft.productId!,
+        catalogSelection: draft.catalogSelection,
         qty: draft.qty!,
         sizeSplit: (draft.sizeSplit as OrderData["sizeSplit"]) ?? {
           S: 0,
@@ -576,6 +627,9 @@ export async function orderFlow(conversation: MyConversation, ctx: MyConversatio
         channel: "telegram",
       };
       await safeAppendOrderRow(partialOrder).catch(() => {});
+      if (partialOrder.catalogSelection) {
+        await appendCatalogSelectionRow(partialOrder.orderId, partialOrder.catalogSelection);
+      }
       await clearDraft(chatId);
     });
     await ctx.reply(COPY.abandonedGoodbye);

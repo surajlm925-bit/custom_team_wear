@@ -14,16 +14,21 @@
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "node --import tsx --test \"tests/**/*.test.ts\"",
     "set-webhook": "tsx scripts/set-webhook.ts",
-    "delete-webhook": "tsx scripts/delete-webhook.ts"
+    "delete-webhook": "tsx scripts/delete-webhook.ts",
+    "webhook-info": "tsx scripts/webhook-info.ts",
+    "generate-catalog": "tsx scripts/generate-catalog.ts"
   },
   "dependencies": {
     "@grammyjs/conversations": "2.1.1",
     "@sentry/node": "10.71.0",
     "@upstash/ratelimit": "2.0.8",
     "@upstash/redis": "1.38.3",
+    "@vercel/blob": "0.27.3",
+    "@vercel/functions": "3.9.5",
     "google-auth-library": "11.0.2",
     "google-spreadsheet": "5.3.0",
     "grammy": "1.46.0",
+    "mupdf": "1.28.0",
     "qrcode": "1.5.4",
     "sharp": "0.35.4"
   },

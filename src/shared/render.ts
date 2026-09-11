@@ -23,6 +23,28 @@ function sizeSplitLine(order: OrderData): string {
   return `S:${order.sizeSplit.S} M:${order.sizeSplit.M} L:${order.sizeSplit.L} XL:${order.sizeSplit.XL} XXL:${order.sizeSplit.XXL} 3XL:${order.sizeSplit["3XL"]}`;
 }
 
+/**
+ * The confirmed catalog pick line — exact item + colour the customer
+ * approved. Empty string for legacy orders with no catalog selection
+ * (filtered out of the card). Ensures the customer/admin see the EXACT
+ * garment, never just the generic tier product label.
+ */
+function catalogSelectionLine(order: OrderData): string {
+  const sel = order.catalogSelection;
+  if (!sel) return "";
+  const colour = sel.colorName ? ` · ${sel.colorName}` : "";
+  return `🎽 Selected: ${sel.itemLabel}${colour}`;
+}
+
+/** Full catalog-selection detail for the admin card (item, colour, source page, reference image). */
+function catalogSelectionAdminLine(order: OrderData): string {
+  const sel = order.catalogSelection;
+  if (!sel) return "";
+  const colour = sel.colorName ? ` · Colour: ${sel.colorName}${sel.colorCode ? ` (${sel.colorCode})` : ""}` : "";
+  const ref = sel.referenceImagePath ?? sel.referenceImageUrl ?? "n/a";
+  return `Catalog: ${sel.itemLabel}${colour} · Page ${sel.sourcePage} · Ref: ${ref}`;
+}
+
 function timelineLabel(order: OrderData): string {
   const base =
     order.timeline === "urgent"
@@ -43,6 +65,7 @@ export function renderQuoteCard(order: OrderData): string {
   const lines = [
     `🧾 **Your Estimate** · #${order.orderId}`,
     `${tierLabel} · ${productLabel} · ${order.qty} pcs`,
+    catalogSelectionLine(order),
     "─────────────────────",
     `👕 Garment: ${order.qty} × ${formatRupees(order.garmentRate)} = **${formatRupees(order.garmentTotal)}**`,
     `🖼 Printing (${printMethod.label}): ${order.qty} × ₹${printMethod.range[0]}–${printMethod.range[1]} = **${formatRupees(order.printEstLow)} – ${formatRupees(order.printEstHigh)}**`,
@@ -50,9 +73,9 @@ export function renderQuoteCard(order: OrderData): string {
     "─────────────────────",
     `**Est. Total: ${formatRupees(order.grandEstLow)} – ${formatRupees(order.grandEstHigh)} (+GST)**`,
     "",
-    `💳 **Pay today (garment advance): ${formatRupees(order.advanceDue)}**`,
-    "Printing balance + GST invoiced only after artwork approval — before production begins. **No hidden charges.**",
-  ];
+    `💳 **Pay today (garment advance ≈ 50%): ${formatRupees(order.advanceDue)}**`,
+    "Remaining garment balance + printing + GST invoiced after artwork approval — before production begins. **No hidden charges.**",
+  ].filter((l) => l !== "");
   return lines.join("\n");
 }
 
@@ -66,12 +89,13 @@ export function renderAdminCard(order: OrderData): string {
     "🛒 **NEW ORDER — PENDING PAYMENT VERIFICATION**",
     "─────────────────",
     `\`${order.orderId}\` · ${tierLabel} · ${productLabel} · ${order.qty} pcs`,
+    catalogSelectionAdminLine(order),
     `Sizes: ${sizeSplitLine(order)}`,
     `Print: ${getPrintMethod(order.printMethod).label} · Placement: ${placementLabel(order)} · Timeline: ${timelineLabel(order)} · City: ${order.city}`,
-    `Garment ${formatRupees(order.garmentTotal)} · Est. print ${formatRupees(order.printEstLow)}–${formatRupees(order.printEstHigh)} · Advance due **${formatRupees(order.advanceDue)}**`,
+    `Garment ${formatRupees(order.garmentTotal)} · Est. print ${formatRupees(order.printEstLow)}–${formatRupees(order.printEstHigh)} · Advance due (≈50%) **${formatRupees(order.advanceDue)}**`,
     `Customer: ${order.name} · ${order.phone} · ${order.customerChatId} · Logos: ${order.logos.length > 0 ? `${order.logos.length} received ✔` : "not provided"}`,
     "─────────────────",
-  ];
+  ].filter((l) => l !== "");
   return lines.join("\n");
 }
 
