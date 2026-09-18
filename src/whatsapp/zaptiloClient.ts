@@ -4,7 +4,13 @@ import { getEnv } from '../config/env.js';
 /** Call Zaptilo REST API. Base URL: https://api.zaptilo.ai */
 async function zaptiloFetch(path: string, body: Record<string, unknown>): Promise<any> {
   const env = getEnv();
-  const url = `${env.ZAPTILO_BASE_URL}${path}`;
+  // Zaptilo's documentation incorrectly states their API is at api.zaptilo.ai
+  // The real endpoint is web.zaptilo.ai. We fix this automatically to prevent 404s.
+  let baseUrl = env.ZAPTILO_BASE_URL;
+  if (baseUrl.includes('api.zaptilo.')) {
+    baseUrl = 'https://web.zaptilo.ai';
+  }
+  const url = `${baseUrl}${path}`;
   const res = await fetch(url, {
     method: 'POST',
     headers: {
