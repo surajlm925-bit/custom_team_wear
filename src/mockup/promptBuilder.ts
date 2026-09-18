@@ -23,10 +23,11 @@
  * fallback if AI generation continues to introduce unwanted changes.
  */
 
-import type { LogoPlacement } from "../pricing/priceBook.js";
+import type { LogoPlacement, PrintMethod } from "../pricing/priceBook.js";
 import type { TemplateView } from "./zones.js";
 import { getZoneForPlacement, PLACEMENT_VIEWS } from "./zones.js";
 import type { GarmentDescriptor } from "./garmentReference.js";
+import { getColorHex } from "../catalog/colorHex.js";
 
 const PLACEMENT_DESCRIPTIONS: Record<LogoPlacement, string> = {
   left_chest: "the wearer's left chest area (small logo, like a polo emblem)",
@@ -35,6 +36,10 @@ const PLACEMENT_DESCRIPTIONS: Record<LogoPlacement, string> = {
   left_sleeve: "the left sleeve, over the bicep area (the wearer's left arm, which appears on the RIGHT side of a front-facing photo)",
   right_sleeve: "the right sleeve, over the bicep area (the wearer's right arm, which appears on the LEFT side of a front-facing photo)",
 };
+
+const WHITE_TEMPLATE_DESC = "Reference image #1 is a white-base garment template; the garment colour will be set to the hex code specified in the prompt, and all other garment attributes are preserved from this white base.";
+
+const SLEEVE_SIDE_ANGLE_PROMPT = "Also generate a side-angle view showing the sleeve on the garment's side, with the front of the shirt visible alongside the sleeve, so both the sleeve placement and the garment's front are clearly visible.";
 
 export interface LogoAssignment {
   /** Index into the caller's logo image array (0-based). */
@@ -78,6 +83,7 @@ export function buildMockupPrompt(
   templateHeight: number,
   logoRefOffset = 2,
   garment?: GarmentDescriptor,
+  printMethod?: PrintMethod,
 ): string {
   const viewLabel = view === "front" ? "front view" : "back view";
   const relevant = assignments.filter((a) => PLACEMENT_VIEWS[a.placement] === view);
@@ -88,12 +94,30 @@ export function buildMockupPrompt(
   // preservation instruction, not a restyle instruction.
   const garmentTypeWord = garment?.garmentType === "polo" ? "polo shirt" : "round-neck t-shirt";
   const styleClause = garment?.styleLabel ? ` (the "${garment.styleLabel}" style)` : "";
+  const colorHex = garment?.colorName ? getColorHex(garment.colorName) : null;
+  const colorNameDisplay = garment?.colorName ?? "";
   const colorClause = garment?.colorName
-    ? ` Its colour is ${garment.colorName}; keep this exact colour and shade unchanged.`
+    ? `Its colour is expected to be ${colorNameDisplay} (hex ${colorHex ?? "000000"}); keep this exact colour and shade unchanged.`
     : "";
   const garmentIdentityLine = garment
     ? `Reference image #1 shows the exact ${garmentTypeWord}${styleClause} the customer has chosen. Keep its garment type, brand, style, cut, fabric, and colour exactly as shown — do not substitute a different or generic garment.${colorClause}`
     : "";
+
+  // Print/embroidery texture language for the prompt
+  const printMethodKey = printMethod ?? "none";
+  const textureLanguage =
+    printMethodKey === "embroidery"
+      ? "stitch in thread direction matching the original logo"
+      : printMethodKey === "dtf" || printMethodKey === "screen_print" || printMethodKey === "sublimation"
+        ? "flat ink application, no visible brush strokes"
+        : "";
+
+  // Sleeve-side-angle prompt: if any assignment is a sleeve placement, add side-angle view
+  const sleeveAssignments = assignments.filter(
+    (a) => a.placement === "left_sleeve" || a.placement === "right_sleeve",
+  );
+  const sleeveSideAnglePrompt =
+    sleeveAssignments.length > 0 ? SLEEVE_SIDE_ANGLE_PROMPT : "";
 
   const placementLines = relevant
     .map((a) => {
@@ -114,16 +138,16 @@ export function buildMockupPrompt(
     })
     .join("\n");
 
-  // Reference image #1 is now the customer's EXACT selected catalog
-  // product photo (their brand/style/colour), which may show the garment
-  // worn by a model or laid flat depending on the catalogue. The prompt
-  // therefore no longer assumes an empty/flat template; it instead frames
-  // the task as a minimal edit that preserves whatever reference #1
-  // actually shows (garment, colour, model/scene, framing) and only adds
-  // the logo. When a garment descriptor is available it is stated up
-  // front so the model preserves brand/style/colour rather than drifting.
+  // Reference image #1 is now the white-base garment template the customer confirmed
+  // in the catalog flow (their selected brand/style + colour), rendered as a white
+  // silhouette with the exact colour preserved via the hex code in the prompt.
   const lines = [
     garmentIdentityLine,
+    WHITE_TEMPLATE_DESC,
+    textureLanguage
+      ? `Apply the following texture: ${textureLanguage}.`
+      : "",
+    sleeveSideAnglePrompt,
     `Reference image #1 is the product photo of the exact garment (${viewLabel}), exactly ${templateWidth}x${templateHeight} pixels. Treat whatever it shows — the garment, its colour and fabric, the background, and any model or scene — as fixed.`,
     "TASK: This is a minimal edit, not a new photo. Start from reference image #1 exactly as given, and make the smallest possible change: add the logo(s) described below onto the garment fabric at the specified position(s). Every other pixel — the garment's type, brand, style, shape, colour, and fabric texture, the background, the camera framing and crop, the lighting, and any model shown — must remain exactly as it is in reference image #1. Do not regenerate or reimagine the scene; treat this as pasting the logo onto the existing photo, not recreating the photo.",
     placementLines,
@@ -137,7 +161,9 @@ export function buildMockupPrompt(
     "- The result should look like the logo was simply added to reference image #1 with everything else identical — not like a new photo was created.",
     `Output a single image, exactly ${templateWidth}x${templateHeight} pixels, identical in aspect ratio and framing to reference image #1.`,
   ];
-  return lines.filter(Boolean).join("\n\n");
+  return lines
+    .filter((line) => line.trim() !== "")
+    .join("\n\n");
 }
 
 /** Distinct template views touched by a set of logo assignments. */

@@ -111,7 +111,7 @@ export function generationToRow(record: MockupGeneration): MockupGenerationsRow 
     "Reference Image": record.garmentReferenceRef ?? "",
     "Requested Views": record.requestedViews.join(", "),
     "Output URLs": outputUrls,
-    "Payment Proof File ID": record.paymentProofFileId ?? "",
+    "Payment Proof File ID": record.paymentProofMessageId ?? "",
     "Admin Decision By": record.decidedByAdminChatId ?? "",
     "Failure Reason": record.failureReason ?? "",
     "Created At": record.createdAt,

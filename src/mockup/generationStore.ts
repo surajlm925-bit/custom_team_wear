@@ -162,6 +162,7 @@ export class InvalidGenerationTransitionError extends Error {
   }
 }
 
+
 export interface AdvanceResult {
   record: MockupGeneration;
   /** True when this call actually performed the transition; false when it was already there (idempotent no-op). */

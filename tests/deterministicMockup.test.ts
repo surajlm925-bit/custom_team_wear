@@ -115,7 +115,7 @@ function legacyOrder(logos: OrderData["logos"]): OrderData {
     grandEstHigh: 6200,
     advanceDue: 3000,
     customerChatId: "tg:12345",
-    channel: "telegram",
+    channel: "whatsapp",
   };
 }
 

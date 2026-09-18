@@ -15,7 +15,6 @@
  * after approval are all no-ops rather than re-charges or double sends.
  */
 
-import { Bot, InlineKeyboard } from "grammy";
 import { getEnv } from "../config/env.js";
 import { COPY } from "../conversation/copy.js";
 import type { OrderData } from "../shared/types.js";
@@ -28,22 +27,13 @@ import {
   claimDecision,
 } from "./generationStore.js";
 import { triggerMockupDelivery } from "./deliverTrigger.js";
+import { sendMessage, sendInteractiveButtons } from "../whatsapp/zaptiloClient.js";
 
-let botInstance: Bot | undefined;
-function getBot(): Bot {
-  if (!botInstance) botInstance = new Bot(getEnv().TELEGRAM_BOT_TOKEN);
-  return botInstance;
-}
-
-function extractTelegramChatId(customerChatId: string): number | null {
-  const match = /^tg:(\d+)$/.exec(customerChatId);
-  return match ? Number(match[1]) : null;
-}
-
-function decisionKeyboard(generationId: string): InlineKeyboard {
-  return new InlineKeyboard()
-    .text("✅ Approve mockup payment", `mockupgen:approve:${generationId}`)
-    .text("🚩 Reject", `mockupgen:reject:${generationId}`);
+function decisionButtons(generationId: string) {
+  return [
+    { id: `mockupgen:approve:${generationId}`, title: "✅ Approve mockup" },
+    { id: `mockupgen:reject:${generationId}`, title: "🚩 Reject" }
+  ];
 }
 
 export interface AttachProofResult {
@@ -58,21 +48,21 @@ export interface AttachProofResult {
  */
 export async function attachPaymentProof(
   generationId: string,
-  paymentProofFileId: string,
+  paymentProofMessageId: string,
 ): Promise<AttachProofResult> {
   const record = await loadGeneration(generationId);
   if (!record) return { ok: false, reason: "generation not found" };
 
   if (record.status === "awaiting_payment") {
-    const advanced = await advanceStatus(generationId, "awaiting_approval", { paymentProofFileId });
-    await forwardProofToAdmins(advanced.record, paymentProofFileId);
+    const advanced = await advanceStatus(generationId, "awaiting_approval", { paymentProofMessageId });
+    await forwardProofToAdmins(advanced.record, paymentProofMessageId);
     return { ok: true };
   }
 
   if (record.status === "awaiting_approval") {
-    // Duplicate proof — refresh the stored file id, re-notify, no state change.
-    await advanceStatus(generationId, "awaiting_approval", { paymentProofFileId }).catch(() => {});
-    await forwardProofToAdmins(record, paymentProofFileId);
+    // Duplicate proof — refresh the stored message id, re-notify, no state change.
+    await advanceStatus(generationId, "awaiting_approval", { paymentProofMessageId }).catch(() => {});
+    await forwardProofToAdmins(record, paymentProofMessageId);
     return { ok: true };
   }
 
@@ -82,30 +72,25 @@ export async function attachPaymentProof(
 
 async function forwardProofToAdmins(
   record: { generationId: string; orderId: string; amountInr: number },
-  paymentProofFileId: string,
+  _paymentProofMessageId: string,
 ): Promise<void> {
   const env = getEnv();
-  const bot = getBot();
   const caption =
-    `🎨 *Paid mockup approval needed*\n` +
+    `*Paid mockup approval needed*\n` +
     `Order: \`${record.orderId}\`\n` +
     `Amount: ₹${record.amountInr}\n\n` +
     `Verify this payment against your UPI/bank statement, then Approve or Reject.`;
-  const keyboard = decisionKeyboard(record.generationId);
+
   for (const adminChatId of env.ADMIN_CHAT_IDS) {
     try {
-      await bot.api.sendPhoto(adminChatId, paymentProofFileId, {
-        caption,
-        parse_mode: "Markdown",
-        reply_markup: keyboard,
-      });
+      // NOTE: For WhatsApp, if the user sent an image, we would ideally forward that image.
+      // However, Zaptilo doesn't have a simple forward mechanism by message ID without downloading it first.
+      // For now, we'll send a text message with the interactive buttons, and in a real app,
+      // we'd download the image using the Zaptilo API and send it using sendMedia.
+      // This is a known limitation of this migration step.
+      await sendInteractiveButtons(adminChatId.toString(), caption, decisionButtons(record.generationId));
     } catch (err) {
-      await bot.api
-        .sendMessage(adminChatId, `${caption}\n\n(⚠️ proof forward failed: ${String(err)})`, {
-          parse_mode: "Markdown",
-          reply_markup: keyboard,
-        })
-        .catch(() => {});
+      await sendMessage(adminChatId.toString(), `${caption}\n\n(⚠️ proof forward failed: ${String(err)})`).catch(() => {});
     }
   }
 }
@@ -122,7 +107,7 @@ export interface DecisionResult {
  *
  * Production: dispatch to the standalone /api/mockup-delivery function
  * (src/mockup/deliverTrigger.ts) — generation must never run inline inside
- * the webhook/grammY budget. The dispatch is idempotent: the generation
+ * the webhook/Zaptilo budget. The dispatch is idempotent: the generation
  * record is already `approved`, so the workflow's sticky paid decision
  * re-runs exactly one generation without re-charging.
  *
@@ -148,7 +133,7 @@ export function __setAfterApprovalDeliverForTests(fn?: AfterApprovalDeliver) {
  */
 export async function approvePaidGeneration(
   generationId: string,
-  adminChatId: number,
+  adminChatId: string,
 ): Promise<DecisionResult> {
   const record = await loadGeneration(generationId);
   if (!record) return { ok: false, changed: false, reason: "generation not found" };
@@ -185,9 +170,9 @@ export async function approvePaidGeneration(
   }
 
   // Tell the customer their payment cleared, then generate.
-  const customerChatId = extractTelegramChatId(order.customerChatId);
+  const customerChatId = order.customerChatId.replace(/^wa:/, "");
   if (customerChatId) {
-    await getBot().api.sendMessage(customerChatId, COPY.mockupPaidApprovedNote.trim()).catch(() => {});
+    await sendMessage(customerChatId, COPY.mockupPaidApprovedNote.trim()).catch(() => {});
   }
 
   const outcome = await afterApprovalDeliver(order);
@@ -199,7 +184,7 @@ export async function approvePaidGeneration(
  */
 export async function rejectPaidGeneration(
   generationId: string,
-  adminChatId: number,
+  adminChatId: string,
 ): Promise<DecisionResult> {
   const record = await loadGeneration(generationId);
   if (!record) return { ok: false, changed: false, reason: "generation not found" };
@@ -220,9 +205,9 @@ export async function rejectPaidGeneration(
   await setChatPendingGeneration(record.customerChatId, null).catch(() => {});
 
   const order = await loadOrderSnapshot(record.orderId).catch(() => undefined);
-  const customerChatId = order ? extractTelegramChatId(order.customerChatId) : null;
+  const customerChatId = order ? order.customerChatId.replace(/^wa:/, "") : null;
   if (customerChatId) {
-    await getBot().api.sendMessage(customerChatId, COPY.mockupPaidRejected).catch(() => {});
+    await sendMessage(customerChatId, COPY.mockupPaidRejected).catch(() => {});
   }
   return { ok: true, changed: true };
 }

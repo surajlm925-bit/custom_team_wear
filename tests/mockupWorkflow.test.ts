@@ -71,7 +71,7 @@ function captureUploader(): { uploader: BlobUploader; uploads: { pathname: strin
 
 function captureSend(): { sendPhoto: NonNullable<MockupDeliveryDeps["sendPhoto"]>; sent: string[] } {
   const sent: string[] = [];
-  const sendPhoto = async (_chatId: number, _buffer: Buffer, filename: string) => {
+  const sendPhoto = async (_chatId: string, _url: string, filename: string, _caption: string) => {
     sent.push(filename);
     return `tg-file-${filename}`;
   };
@@ -136,7 +136,7 @@ function legacyOrder(overrides: Partial<OrderData> = {}, logos?: LogoUpload[]): 
     grandEstHigh: 6200,
     advanceDue: 6000,
     customerChatId: "tg:5512345678",
-    channel: "telegram",
+    channel: "whatsapp",
     ...overrides,
   };
 }
@@ -250,7 +250,7 @@ test("admin approval generates the mockup; before approval nothing generates", a
 
   const d = deps();
   useInlineApprovalDelivery(d);
-  const result = await approvePaidGeneration(orderId, 999);
+  const result = await approvePaidGeneration(orderId, "999");
   assert.equal(result.changed, true);
 
   const after = await loadGeneration(orderId);
@@ -265,7 +265,7 @@ test("admin reject moves to rejected and never generates", async () => {
   const orderId = "CTW-260815-21";
   await seedPaidAwaitingApproval(chat, orderId);
 
-  const result = await rejectPaidGeneration(orderId, 999);
+  const result = await rejectPaidGeneration(orderId, "999");
   assert.equal(result.changed, true);
 
   const after = await loadGeneration(orderId);
@@ -281,14 +281,14 @@ test("duplicate admin Approve does not regenerate or re-charge", async () => {
 
   const d1 = deps();
   useInlineApprovalDelivery(d1);
-  const first = await approvePaidGeneration(orderId, 999);
+  const first = await approvePaidGeneration(orderId, "999");
   assert.equal(first.changed, true);
   assert.equal(d1.providerCalls(), 1);
 
   // Second identical Approve (double-click / duplicate callback).
   const d2 = deps();
   useInlineApprovalDelivery(d2);
-  const second = await approvePaidGeneration(orderId, 999);
+  const second = await approvePaidGeneration(orderId, "999");
   assert.equal(second.changed, false, "duplicate approve must be a no-op");
   assert.equal(d2.providerCalls(), 0, "duplicate approve must not regenerate");
 });
@@ -299,9 +299,9 @@ test("Reject after Approve is refused (approval already won)", async () => {
   await seedPaidAwaitingApproval(chat, orderId);
 
   useInlineApprovalDelivery(deps());
-  await approvePaidGeneration(orderId, 999);
+  await approvePaidGeneration(orderId, "999");
 
-  const rejectResult = await rejectPaidGeneration(orderId, 999);
+  const rejectResult = await rejectPaidGeneration(orderId, "999");
   assert.equal(rejectResult.changed, false);
   const rec = await loadGeneration(orderId);
   assert.notEqual(rec?.status, "rejected");
@@ -332,8 +332,8 @@ test("two admins approving at the same instant generate exactly once", async () 
   useInlineApprovalDelivery(dRace);
   // Fire both approvals concurrently (race).
   const [ra, rb] = await Promise.all([
-    approvePaidGeneration(orderId, 111),
-    approvePaidGeneration(orderId, 222),
+    approvePaidGeneration(orderId, "111"),
+    approvePaidGeneration(orderId, "222"),
   ]);
 
   // Exactly one call performed the work.

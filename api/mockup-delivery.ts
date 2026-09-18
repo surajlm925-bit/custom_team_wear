@@ -24,7 +24,7 @@ import { getEnv } from "../src/config/env.js";
 import { loadOrderSnapshot } from "../src/session/orderStore.js";
 import { startMockupGeneration } from "../src/mockup/workflow.js";
 import { notifyAdminsText } from "../src/admin/notify.js";
-import { getBot, extractTelegramChatId } from "../src/mockup/customerNotify.js";
+import { sendMessage } from "../src/whatsapp/zaptiloClient.js";
 import { COPY } from "../src/conversation/copy.js";
 
 /** Constant-time secret comparison to avoid leaking match-length via timing. */
@@ -42,7 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const env = getEnv();
-  const expectedSecret = env.INTERNAL_MOCKUP_SECRET || env.WEBHOOK_SECRET;
+  const expectedSecret = env.INTERNAL_MOCKUP_SECRET || env.ZAPTILO_WEBHOOK_SECRET;
   const providedSecret = req.headers["x-internal-secret"];
   if (typeof providedSecret !== "string" || !secretsMatch(providedSecret, expectedSecret)) {
     console.warn("Rejected /api/mockup-delivery call with invalid or missing internal secret.");
@@ -64,7 +64,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   waitUntil(
     (async () => {
-      const orderSnapshot = await loadOrderSnapshot(orderId).catch((err) => {
+      const orderSnapshot = await loadOrderSnapshot(orderId).catch((err: any) => {
         console.error(`Failed to load order snapshot for mockup delivery (${orderId}):`, err);
         return undefined;
       });
@@ -91,13 +91,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           // Ask the customer to pay for this extra mockup; nothing is
           // generated until an admin approves the payment proof.
           const env2 = getEnv();
-          const chatId = extractTelegramChatId(orderSnapshot.customerChatId);
-          if (chatId !== null) {
-            await getBot()
-              .api.sendMessage(chatId, COPY.mockupPaidRequired(outcome.amountInr, env2.MOCKUP_FREE_PER_MONTH), {
-                parse_mode: "Markdown",
-              })
-              .catch((err) => console.error(`Failed to send paid-mockup prompt for ${orderId}:`, err));
+          const chatId = orderSnapshot.customerChatId.replace(/^wa:/, "");
+          if (chatId) {
+            await sendMessage(chatId, COPY.mockupPaidRequired(outcome.amountInr, env2.MOCKUP_FREE_PER_MONTH))
+              .catch((err: any) => console.error(`Failed to send paid-mockup prompt for ${orderId}:`, err));
           }
           await notifyAdminsText(
             `💳 Mockup for ${orderId} needs payment (₹${outcome.amountInr}) — customer's free monthly quota is used up. Awaiting their payment proof.`,

@@ -99,8 +99,8 @@ export interface MockupOutputImage {
   url?: string;
   /** Blob object pathname (stable id) when stored. */
   pathname?: string;
-  /** Telegram file_id of the delivered photo, when sent. */
-  telegramFileId?: string;
+  /** If delivered successfully, the Zaptilo message ID. */
+  zaptiloMessageId?: string;
   /** Provider cost in USD for this image, when reported. */
   costUsd?: number;
 }
@@ -133,10 +133,10 @@ export interface MockupGeneration {
   logos: LogoUpload[];
   /** Durably-stored output images (one per produced view). */
   outputs: MockupOutputImage[];
-  /** Telegram file_id of the customer's payment proof (paid generations only). */
-  paymentProofFileId?: string;
+  /** Zaptilo message ID of the customer's payment proof (paid generations only). */
+  paymentProofMessageId?: string;
   /** Admin chat id that approved/rejected (paid generations only). */
-  decidedByAdminChatId?: number;
+  decidedByAdminChatId?: string;
   createdAt: string;
   updatedAt: string;
   /** Set when status reaches completed. */
@@ -175,7 +175,7 @@ export interface OrderData {
   grandEstLow: number;
   grandEstHigh: number;
   advanceDue: number;
-  customerChatId: string; // channel-prefixed, e.g. "tg:5512345678"
-  channel: "telegram";
+  customerChatId: string; // channel-prefixed, e.g. "wa:919876543210"
+  channel: "whatsapp";
   adminNotes?: string;
 }

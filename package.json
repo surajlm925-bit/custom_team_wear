@@ -19,23 +19,21 @@
     "generate-catalog": "tsx scripts/generate-catalog.ts"
   },
   "dependencies": {
-    "@grammyjs/conversations": "2.1.1",
     "@sentry/node": "10.71.0",
+    "@types/node": "26.4.0",
+    "@types/qrcode": "1.5.6",
     "@upstash/ratelimit": "2.0.8",
     "@upstash/redis": "1.38.3",
     "@vercel/blob": "0.27.3",
     "@vercel/functions": "3.9.5",
+    "@vercel/node": "8.1.2",
     "google-auth-library": "11.0.2",
     "google-spreadsheet": "5.3.0",
-    "grammy": "1.46.0",
     "mupdf": "1.28.0",
     "qrcode": "1.5.4",
     "sharp": "0.35.4",
-    "@types/node": "26.4.0",
-    "@types/qrcode": "1.5.6",
-    "@vercel/node": "8.1.2",
     "tsx": "4.23.12",
-    "typescript": "7.0.2"
-  },
-  "devDependencies": {}
+    "typescript": "7.0.2",
+    "zaptilo-whatsapp": "^1.1.0"
+  }
 }

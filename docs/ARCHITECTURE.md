@@ -21,6 +21,7 @@ flowchart TD
         ConvFlow["Conversation Engine<br/>(src/conversation/orderFlow.ts)"]
         PricingEngine["Pricing Engine<br/>(src/pricing/index.ts)"]
         MockupPipeline["Mockup Pipeline<br/>(src/mockup/workflow.ts)"]
+        MockupPromptBuilder["Mockup Prompt Builder<br/>(src/mockup/promptBuilder.ts)"]
         AdminActions["Admin Callbacks<br/>(src/admin/actions.ts)"]
     end
 
@@ -40,6 +41,7 @@ flowchart TD
 
     ConvFlow -->|Price Quote Request| PricingEngine
     ConvFlow -->|Garment Mockup Request| MockupPipeline
+    ConvFlow -->|Prompt Request| MockupPromptBuilder
     ConvFlow <-->|Read / Write State| Redis
 
     MockupPipeline -->|Sharp Composite| VercelBlob

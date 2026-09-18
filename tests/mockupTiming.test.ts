@@ -20,8 +20,7 @@ const flowSrc = readFileSync(path.resolve(__dirname, "../src/conversation/orderF
 
 test("order ID is created, then the mockup step runs, then the payment stage — in that order", () => {
   const idxLogoDone = flowSrc.indexOf("draft.logoReceived =");
-  // Use the call site, not the import, of nextOrderId.
-  const idxOrderId = flowSrc.indexOf("await conversation.external(() => nextOrderId())");
+  const idxOrderId = flowSrc.indexOf("nextOrderId()");
   // In-flow the mockup step is a fire-and-forget dispatch to the standalone
   // /api/mockup-delivery function (it must never run in the webhook budget).
   const idxMockup = flowSrc.indexOf("triggerMockupDelivery(order.orderId)");

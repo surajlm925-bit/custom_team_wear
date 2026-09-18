@@ -71,7 +71,7 @@ function legacyOrder(
     grandEstHigh: 6200,
     advanceDue: 6000,
     customerChatId: chat,
-    channel: "telegram",
+    channel: "whatsapp",
   };
 }
 
@@ -205,7 +205,7 @@ test("a paid generation stays ₹20 across an internal-failure retry (no second 
   // Admin approves, but generation FAILS at storage this time.
   const failing = deps({ blobUploader: failingUploader() }).d;
   __setAfterApprovalDeliverForTests(async (order) => deliverMockupForOrder(order, failing));
-  const approveFail = await approvePaidGeneration(paidOrder.orderId, 999);
+  const approveFail = await approvePaidGeneration(paidOrder.orderId, "999");
   __setAfterApprovalDeliverForTests(undefined);
   assert.equal(approveFail.ok, false);
   const failedRec = await loadGeneration(paidOrder.orderId);

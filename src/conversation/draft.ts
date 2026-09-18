@@ -31,6 +31,8 @@ export interface OrderDraft {
   timelineUrgent?: boolean;
   logoReceived?: boolean;
   logos?: LogoUpload[];
+  mockupDecision?: "skip" | "generate";
+  paymentScreenshotId?: string;
   orderId?: string;
   updatedAt?: number;
 }

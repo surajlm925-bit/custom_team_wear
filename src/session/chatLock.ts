@@ -16,19 +16,19 @@ import { getRedis } from "./redisClient.js";
 
 const LOCK_TTL_SECONDS = 90; // covers the slowest realistic step (Sheets append, QR gen, multiple Telegram sends)
 
-function lockKey(chatId: number): string {
+function lockKey(chatId: string): string {
   return `busy:${chatId}`;
 }
 
 /** Attempts to claim the busy lock for this chat. Returns true if claimed. */
-export async function acquireChatLock(chatId: number): Promise<boolean> {
+export async function acquireChatLock(chatId: string): Promise<boolean> {
   const redis = getRedis();
   const result = await redis.set(lockKey(chatId), "1", { nx: true, ex: LOCK_TTL_SECONDS });
   return result === "OK";
 }
 
 /** Releases the busy lock for this chat. Safe to call even if never acquired. */
-export async function releaseChatLock(chatId: number): Promise<void> {
+export async function releaseChatLock(chatId: string): Promise<void> {
   const redis = getRedis();
   await redis.del(lockKey(chatId));
 }

@@ -20,7 +20,7 @@ function getLimiter(): Ratelimit {
 }
 
 /** Returns true if this chat is within the flood-control limit. */
-export async function checkRateLimit(chatId: number): Promise<boolean> {
-  const { success } = await getLimiter().limit(String(chatId));
+export async function checkRateLimit(chatId: string): Promise<boolean> {
+  const { success } = await getLimiter().limit(chatId);
   return success;
 }

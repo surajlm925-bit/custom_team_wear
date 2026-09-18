@@ -18,19 +18,18 @@
  * generic garment would misrepresent what the customer actually ordered.
  */
 
-import fs from "node:fs/promises";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { OrderData } from "../shared/types.js";
 import type { Silhouette } from "../pricing/priceBook.js";
 import { PRODUCT_SILHOUETTE } from "../pricing/priceBook.js";
+import { getColorHex, normalizeColorName } from "../catalog/colorHex.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = path.resolve(__dirname, "../../assets/mockup-templates");
-
-function legacyTemplatePath(silhouette: Silhouette, view: "front" | "back"): string {
-  return path.join(TEMPLATES_DIR, `${silhouette}_${view}.png`);
-}
+const POLO_WHITE_PATH = path.join(TEMPLATES_DIR, "polo_white.png");
+const ROUNDNECK_WHITE_PATH = path.join(TEMPLATES_DIR, "round_neck_white.png");
 
 /** Human-facing description of the exact garment, used to preserve brand/style/colour in the mockup prompt. */
 export interface GarmentDescriptor {
@@ -41,7 +40,7 @@ export interface GarmentDescriptor {
   colorName?: string;
 }
 
-export type GarmentReferenceSource = "catalog-exact" | "legacy-template";
+export type GarmentReferenceSource = "catalog-exact" | "legacy-template" | "white-template";
 
 export interface GarmentReference {
   /** The image bytes to send the AI provider as the garment reference. */
@@ -71,15 +70,41 @@ export function isMockupEligible(_order: OrderData): boolean {
 }
 
 export async function resolveGarmentReference(order: OrderData, view: "front" | "back"): Promise<GarmentReference> {
-  const silhouette = (order.catalogSelection?.garmentType || PRODUCT_SILHOUETTE[order.productId]) ?? "polo";
-  const buffer = await fs.readFile(legacyTemplatePath(silhouette, view));
+  const isLegacy = order.catalogSelection === undefined;
+
+  if (isLegacy) {
+    // Legacy order: use the generic silhouette template (original behaviour)
+    const silhouette = PRODUCT_SILHOUETTE[order.productId] || "polo";
+    const legacyTemplatePath = path.join(TEMPLATES_DIR, `${silhouette}_${view}.png`);
+    const buffer = fs.readFileSync(legacyTemplatePath);
+    const descriptor: GarmentDescriptor = {
+      garmentType: silhouette,
+      styleLabel: undefined,
+    };
+    return {
+      buffer,
+      descriptor,
+      source: "legacy-template",
+    };
+  }
+
+  // Modern order with catalog selection: use white template + hex colour
+  const silhouette = order.catalogSelection?.garmentType || PRODUCT_SILHOUETTE[order.productId] || "polo";
+  const resolvedColorName = normalizeColorName(order.catalogSelection?.colorName ?? "");
+  const colorHex = resolvedColorName ? getColorHex(resolvedColorName) : null;
+  const isPolo = silhouette === "polo";
+  const templatePath = isPolo ? POLO_WHITE_PATH : ROUNDNECK_WHITE_PATH;
+  const buffer = fs.readFileSync(templatePath);
+  const descriptor: GarmentDescriptor = {
+    garmentType: silhouette,
+    styleLabel: order.catalogSelection?.itemLabel,
+  };
+  if (colorHex) {
+    descriptor.colorName = resolvedColorName;
+  }
   return {
     buffer,
-    descriptor: {
-      garmentType: silhouette,
-      styleLabel: order.catalogSelection?.itemLabel,
-      colorName: order.catalogSelection?.colorName,
-    },
-    source: "legacy-template",
+    descriptor,
+    source: "white-template",
   };
 }

@@ -18,10 +18,12 @@ function optional(name: string): string | undefined {
 }
 
 export interface Env {
-  CHANNEL: "telegram";
-  TELEGRAM_BOT_TOKEN: string;
-  WEBHOOK_SECRET: string;
-  ADMIN_CHAT_IDS: number[];
+  CHANNEL: "whatsapp";
+  ZAPTILO_API_KEY: string;
+  ZAPTILO_BASE_URL: string;
+  ZAPTILO_PHONE_NUMBER_ID: string;
+  ZAPTILO_WEBHOOK_SECRET: string;
+  ADMIN_CHAT_IDS: string[];
   MERCHANT_VPA: string;
   STATIC_QR_URL: string;
   REDIS_REST_URL: string;
@@ -40,7 +42,7 @@ export interface Env {
   /**
    * Vercel Blob read/write token — durable storage for generated mockup
    * images (src/storage/blob.ts). When unset, generated images are still
-   * sent to Telegram but not persisted to Blob (the generation record
+   * sent to WhatsApp but not persisted to Blob (the generation record
    * When unset, mockup images are NOT deliverable (generation fails
    * gracefully and escalates) — Blob storage is mandatory for proofs.
    * Auto-populated by Vercel when a Blob store is
@@ -73,10 +75,9 @@ export function getEnv(): Env {
   if (cached) return cached;
 
   const channel = required("CHANNEL");
-  if (channel !== "telegram") {
-    // WhatsApp adapter is architecture-ready but not implemented in v1 (PRD §2.2).
+  if (channel !== "whatsapp") {
     throw new Error(
-      `Unsupported CHANNEL "${channel}". Only "telegram" is implemented in v1.`,
+      `Unsupported CHANNEL "${channel}". Only "whatsapp" is supported.`,
     );
   }
 
@@ -84,22 +85,18 @@ export function getEnv(): Env {
   const adminChatIds = adminIdsRaw
     .split(",")
     .map((s) => s.trim())
-    .filter(Boolean)
-    .map((s) => {
-      const n = Number(s);
-      if (!Number.isInteger(n)) {
-        throw new Error(`ADMIN_CHAT_IDS contains a non-integer value: "${s}"`);
-      }
-      return n;
-    });
+    .filter(Boolean);
+    
   if (adminChatIds.length === 0) {
     throw new Error("ADMIN_CHAT_IDS must contain at least one chat id.");
   }
 
   cached = {
-    CHANNEL: "telegram",
-    TELEGRAM_BOT_TOKEN: required("TELEGRAM_BOT_TOKEN"),
-    WEBHOOK_SECRET: required("WEBHOOK_SECRET"),
+    CHANNEL: "whatsapp",
+    ZAPTILO_API_KEY: required("ZAPTILO_API_KEY"),
+    ZAPTILO_BASE_URL: required("ZAPTILO_BASE_URL"),
+    ZAPTILO_PHONE_NUMBER_ID: required("ZAPTILO_PHONE_NUMBER_ID"),
+    ZAPTILO_WEBHOOK_SECRET: required("ZAPTILO_WEBHOOK_SECRET"),
     ADMIN_CHAT_IDS: adminChatIds,
     MERCHANT_VPA: required("MERCHANT_VPA"),
     STATIC_QR_URL: required("STATIC_QR_URL"),

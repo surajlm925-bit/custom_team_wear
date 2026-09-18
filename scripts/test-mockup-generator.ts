@@ -111,7 +111,7 @@ function mockOrder(id: string, productId: OrderData["productId"], logos: OrderDa
     grandEstHigh: 41900,
     advanceDue: 17950,
     customerChatId: "tg:5185248767",
-    channel: "telegram",
+    channel: "whatsapp",
   };
 }
 

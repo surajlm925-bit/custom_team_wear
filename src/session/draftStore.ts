@@ -13,22 +13,22 @@ import type { OrderDraft } from "../conversation/draft.js";
 
 const TTL_SECONDS = 24 * 60 * 60;
 
-function key(chatId: number): string {
+function key(chatId: string): string {
   return `sess:${chatId}`;
 }
 
-export async function loadDraft(chatId: number): Promise<OrderDraft | undefined> {
+export async function loadDraft(chatId: string): Promise<OrderDraft | undefined> {
   const redis = getRedis();
   const value = await redis.get<OrderDraft>(key(chatId));
   return value ?? undefined;
 }
 
-export async function saveDraft(chatId: number, draft: OrderDraft): Promise<void> {
+export async function saveDraft(chatId: string, draft: OrderDraft): Promise<void> {
   const redis = getRedis();
   await redis.set(key(chatId), { ...draft, updatedAt: Date.now() }, { ex: TTL_SECONDS });
 }
 
-export async function clearDraft(chatId: number): Promise<void> {
+export async function clearDraft(chatId: string): Promise<void> {
   const redis = getRedis();
   await redis.del(key(chatId));
 }

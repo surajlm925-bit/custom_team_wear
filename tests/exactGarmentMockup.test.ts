@@ -56,7 +56,7 @@ function baseOrder(patch: Partial<OrderData> = {}): OrderData {
     grandEstHigh: 20940,
     advanceDue: 8670,
     customerChatId: "tg:12345",
-    channel: "telegram",
+    channel: "whatsapp",
     logos: [{ fileId: "file_logo_1", placement: "left_chest" }],
     catalogSelection: sampleCatalogSelection(),
     ...patch,
@@ -100,7 +100,7 @@ test("legacy order (no catalog data) is treated as legacy and is mockup-eligible
 
 test("the white shirt template (bytes) is what reaches the AI provider", async () => {
   const order = baseOrder();
-  const whiteShirtTemplate = fs.readFileSync(path.join(TEMPLATES_DIR, "polo_front.png"));
+  const whiteShirtTemplate = fs.readFileSync(path.join(TEMPLATES_DIR, "polo_white.png"));
 
   const { provider, calls } = captureProvider();
   const assignments: LogoAssignment[] = [{ logoIndex: 0, placement: "left_chest" }];
@@ -109,7 +109,7 @@ test("the white shirt template (bytes) is what reaches the AI provider", async (
   assert.equal(results.length, 1);
   assert.equal(calls.length, 1);
   assert.ok(calls[0].templateImage.equals(whiteShirtTemplate), "provider must receive the white shirt template");
-  assert.equal(results[0].referenceSource, "legacy-template");
+  assert.equal(results[0].referenceSource, "white-template");
 });
 
 test("brand/style/colour from the selection are woven into the prompt", async () => {
@@ -160,7 +160,7 @@ test("front+back placements produce exactly two images (one per view)", async ()
 test("an order resolves the white silhouette template as its garment reference", async () => {
   const order = baseOrder({ productId: "dry_fit_polo" });
   const ref = await resolveGarmentReference(order, "front");
-  assert.equal(ref.source, "legacy-template");
+  assert.equal(ref.source, "white-template");
   assert.equal(ref.descriptor.garmentType, "polo");
   const expectedBytes = fs.readFileSync(path.join(TEMPLATES_DIR, "polo_front.png"));
   assert.ok(ref.buffer.equals(expectedBytes));

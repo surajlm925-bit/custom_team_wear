@@ -116,6 +116,10 @@ This document is a complete index of all files, modules, symbols, interfaces, an
   - High-level orchestrator: reserves slot -> executes Sharp compositing -> stores in Vercel Blob -> commits quota.
 - **[`src/mockup/deliver.ts`](file:///d:/Work%20Code/Projects/custom%20team%20wear/app/src/mockup/deliver.ts)**:
   - Sends rendered proof directly to the customer's Telegram chat.
+- **[`src/mockup/promptBuilder.ts`](file:///d:/Work%20Code/Projects/custom%20team%20wear/app/src/mockup/promptBuilder.ts)**:
+  - Builds natural-language instructions for AI mockup generation, including white-template framing, colour hex codes, print/embroidery texture language, and sleeve-side-angle prompting.
+- **[`src/catalog/colorHex.ts`](file:///d:/Work%20Code/Projects/custom%20team%20wear/app/src/catalog/colorHex.ts)**:
+  - Static mapping of catalog color names → hex codes; `getColorHex()` and `normalizeColorName()` helpers for consistent colour preservation in AI prompts.
 
 ---
 

@@ -64,32 +64,32 @@ export function renderQuoteCard(order: OrderData): string {
   const isSample = order.orderType === "sample";
 
   const lines = [
-    `🧾 **Your Estimate** · #${order.orderId}`,
+    `🧾 *Your Estimate* · #${order.orderId}`,
     isSample
       ? `🧪 Trial Sample Kit (3 pcs: 1 Value + 1 Recommended + 1 Premium)`
       : `${tierLabel} · ${productLabel} · ${order.qty} pcs`,
     catalogSelectionLine(order),
     "─────────────────────",
     isSample
-      ? `👕 Garments (3 pcs Sample Kit · Plain): **${formatRupees(order.garmentTotal)}**`
-      : `👕 Garment: ${order.qty} × ${formatRupees(order.garmentRate)} = **${formatRupees(order.garmentTotal)}**`,
+      ? `👕 Garments (3 pcs Sample Kit · Plain): *${formatRupees(order.garmentTotal)}*`
+      : `👕 Garment: ${order.qty} × ${formatRupees(order.garmentRate)} = *${formatRupees(order.garmentTotal)}*`,
     isSample
       ? ""
-      : `🖼 Printing (${printMethod.label}): ${order.qty} × ₹${printMethod.range[0]}–${printMethod.range[1]} = **${formatRupees(order.printEstLow)} – ${formatRupees(order.printEstHigh)}**`,
+      : `🖼 Printing (${printMethod.label}): ${order.qty} × ₹${printMethod.range[0]}–${printMethod.range[1]} = *${formatRupees(order.printEstLow)} – ${formatRupees(order.printEstHigh)}*`,
     isSample
       ? ""
-      : "　　⚠️ *estimate — finalized after you approve the artwork*",
+      : "　　⚠️ _estimate — finalized after you approve the artwork_",
     "─────────────────────",
     isSample
-      ? `**Total: ${formatRupees(order.garmentTotal)} (All-Inclusive)**`
-      : `**Est. Total: ${formatRupees(order.grandEstLow)} – ${formatRupees(order.grandEstHigh)} (+GST)**`,
+      ? `*Total: ${formatRupees(order.garmentTotal)} (All-Inclusive)*`
+      : `*Est. Total: ${formatRupees(order.grandEstLow)} – ${formatRupees(order.grandEstHigh)} (+GST)*`,
     "",
     isSample
-      ? `💳 **Pay today (100% full payment): ${formatRupees(order.advanceDue)}**`
-      : `💳 **Pay today (garment advance ≈ 50%): ${formatRupees(order.advanceDue)}**`,
+      ? `💳 *Pay today (100% full payment): ${formatRupees(order.advanceDue)}*`
+      : `💳 *Pay today (garment advance ≈ 50%): ${formatRupees(order.advanceDue)}*`,
     isSample
       ? "Sample kit will be dispatched to your delivery address once payment is verified."
-      : "Remaining garment balance + printing + GST invoiced after artwork approval — before production begins. **No hidden charges.**",
+      : "Remaining garment balance + printing + GST invoiced after artwork approval — before production begins. *No hidden charges.*",
   ].filter((l) => l !== "");
   return lines.join("\n");
 }
@@ -102,7 +102,7 @@ export function renderAdminCard(order: OrderData): string {
   const isSample = order.orderType === "sample";
 
   const lines = [
-    "🛒 **NEW ORDER — PENDING PAYMENT VERIFICATION**",
+    "🛒 *NEW ORDER — PENDING PAYMENT VERIFICATION*",
     "─────────────────",
     `\`${order.orderId}\` · ${isSample ? "🧪 Trial Sample Kit (3 pcs: 1 Value + 1 Recommended + 1 Premium · Plain)" : `${tierLabel} · ${productLabel} · ${order.qty} pcs`}`,
     catalogSelectionAdminLine(order),
@@ -111,8 +111,8 @@ export function renderAdminCard(order: OrderData): string {
       ? `Timeline: ${timelineLabel(order)} · City: ${order.city}`
       : `Print: ${getPrintMethod(order.printMethod).label} · Placement: ${placementLabel(order)} · Timeline: ${timelineLabel(order)} · City: ${order.city}`,
     isSample
-      ? `Garment ${formatRupees(order.garmentTotal)} · Total (100%) **${formatRupees(order.advanceDue)}**`
-      : `Garment ${formatRupees(order.garmentTotal)} · Est. print ${formatRupees(order.printEstLow)}–${formatRupees(order.printEstHigh)} · Advance due (≈50%) **${formatRupees(order.advanceDue)}**`,
+      ? `Garment ${formatRupees(order.garmentTotal)} · Total (100%) *${formatRupees(order.advanceDue)}*`
+      : `Garment ${formatRupees(order.garmentTotal)} · Est. print ${formatRupees(order.printEstLow)}–${formatRupees(order.printEstHigh)} · Advance due (≈50%) *${formatRupees(order.advanceDue)}*`,
     `Customer: ${order.name} · ${order.phone} · ${order.customerChatId} · Logos: ${order.logos.length > 0 ? `${order.logos.length} received ✔` : "not provided"}`,
     "─────────────────",
   ].filter((l) => l !== "");
@@ -121,5 +121,5 @@ export function renderAdminCard(order: OrderData): string {
 
 /** Customer confirmation DM (fires only on authorized admin ✅). PRD Appendix A. */
 export function renderConfirmationDm(orderId: string): string {
-  return `🎉 **Order ${orderId} confirmed!** Production planning begins. Our team will reach out shortly with your artwork proof & next steps.`;
+  return `🎉 *Order ${orderId} confirmed!* Production planning begins. Our team will reach out shortly with your artwork proof & next steps.`;
 }

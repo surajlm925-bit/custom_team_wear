@@ -1,23 +1,15 @@
 /**
- * Vercel serverless webhook entry point — PRD §4.2.
- * - Validates X-Telegram-Bot-Api-Secret-Token on 100% of requests BEFORE
- *   touching Redis (dedupe), so an unauthenticated request can't poison the
- *   update_id dedupe set with arbitrary/future ids (DoS on real updates).
- *   grammY's webhookCallback re-checks the same secret internally.
- * - Dedupes on update_id before handing off to the bot (PRD §8.4, AC5),
- *   using a lightweight parse of the body Vercel already JSON-parsed.
+ * Vercel serverless webhook entry point for Zaptilo WhatsApp API
  */
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { timingSafeEqual } from "node:crypto";
-import { webhookCallback } from "grammy";
-import { getBot } from "../src/bot/index.js";
+import { timingSafeEqual, createHmac } from "node:crypto";
 import { getEnv } from "../src/config/env.js";
 import { claimUpdate } from "../src/session/dedupe.js";
 import { BUILD_STAMP } from "../src/config/version.js";
+import { ZaptiloWebhookPayload } from "../src/whatsapp/types.js";
+import { handleMessage } from "../src/bot/index.js";
 
-// Logged once per cold start so every deployment's function logs prove
-// which build is actually serving webhook traffic (deploy-lag diagnosis).
 let buildStampLogged = false;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -28,6 +20,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     buildStampLogged = true;
   }
 
+  // Zaptilo Webhook Verification (GET request)
+  if (req.method === "GET") {
+    const mode = req.query["hub.mode"];
+    const token = req.query["hub.verify_token"];
+    const challenge = req.query["hub.challenge"];
+    const env = getEnv();
+
+    if (mode === "subscribe" && token === env.ZAPTILO_WEBHOOK_SECRET) {
+      console.log("Webhook verified");
+      res.status(200).send(challenge);
+      return;
+    } else {
+      res.status(403).send("Forbidden");
+      return;
+    }
+  }
+
   if (req.method !== "POST") {
     res.status(405).send("Method Not Allowed");
     return;
@@ -35,47 +44,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const env = getEnv();
 
-  // Reject inauthentic requests before any side effects (Redis writes).
-  const providedSecret = req.headers["x-telegram-bot-api-secret-token"];
-  const expectedBuf = Buffer.from(env.WEBHOOK_SECRET);
-  const providedBuf = Buffer.from(typeof providedSecret === "string" ? providedSecret : "");
-  if (providedBuf.length !== expectedBuf.length || !timingSafeEqual(providedBuf, expectedBuf)) {
-    res.status(401).send("Unauthorized");
-    return;
-  }
-
-  const update = req.body as { update_id?: number } | undefined;
-  if (update && typeof update.update_id === "number") {
-    const isNew = await claimUpdate(update.update_id);
-    if (!isNew) {
-      // Duplicate delivery (PRD §8.4, AC5) — ack without reprocessing.
-      res.status(200).send("OK (duplicate)");
+  // Signature verification (X-Hub-Signature-256)
+  const signature = req.headers["x-hub-signature-256"] as string;
+  if (signature) {
+    const rawBody = JSON.stringify(req.body); // In a real app, you'd use raw body buffer
+    const expectedSignature = `sha256=${createHmac("sha256", env.ZAPTILO_WEBHOOK_SECRET).update(rawBody).digest("hex")}`;
+    if (!timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
+      res.status(401).send("Unauthorized");
       return;
     }
+  } else if (req.headers["x-zaptilo-secret"] !== env.ZAPTILO_WEBHOOK_SECRET) {
+     // Fallback for simple secret header if Zaptilo uses that
+      res.status(401).send("Unauthorized");
+      return;
   }
 
-  const bot = getBot();
-  const callback = webhookCallback(bot, "next-js", {
-    secretToken: env.WEBHOOK_SECRET,
-    // grammY's own internal timeout defaults to 10s and is independent of
-    // Vercel's `maxDuration` (30s, see vercel.json). The webhook handler
-    // itself never awaits AI mockup generation anymore — that work happens
-    // in the standalone api/mockup-delivery.ts function, dispatched via a
-    // fire-and-forget HTTP call (src/mockup/deliverTrigger.ts) that returns
-    // almost instantly. This keeps some headroom above grammY's default for
-    // slower-but-still-fast steps (Sheets append, multiple Telegram sends)
-    // without ever needing to cover a 30-60s AI call in-process.
-    timeoutMilliseconds: 25_000,
-  });
+  const payload = req.body as ZaptiloWebhookPayload;
+  
+  if (payload.object === 'whatsapp_business_account' && payload.entry) {
+    for (const entry of payload.entry) {
+      for (const change of entry.changes) {
+        if (change.value.messages) {
+          for (const message of change.value.messages) {
+            // Deduplicate based on message ID
+            const isNew = await claimUpdate(message.id);
+            if (!isNew) {
+               continue;
+            }
 
-  try {
-    await callback(req, res);
-  } catch (err) {
-    console.error("Error handling Telegram update:", err);
-    if (!res.writableEnded) {
-      // Still ACK with 200 so Telegram does not retry-storm us; the error
-      // is logged and, for money-critical paths, escalated separately.
-      res.status(200).send("OK (error logged)");
+            const chatId = `wa:${message.from}`;
+            
+            try {
+              // Route to manual state machine router
+              await handleMessage(chatId, message);
+              console.log("Received message from", chatId, message);
+            } catch (err) {
+              console.error("Error handling WhatsApp message:", err);
+            }
+          }
+        }
+      }
     }
   }
+
+  // Always return 200 OK to prevent retries
+  res.status(200).send("EVENT_RECEIVED");
 }
