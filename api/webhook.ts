@@ -66,11 +66,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           continue;
         }
 
-        const isNew = await claimUpdate(messageId);
-        if (!isNew) {
-          console.log("[webhook] Duplicate message, skipping");
-          continue;
-        }
+        // const isNew = await claimUpdate(messageId);
+        // if (!isNew) {
+        //   console.log("[webhook] Duplicate message, skipping");
+        //   continue;
+        // }
 
         const chatId = `wa:${from}`;
         // message shape already matches our internal format
