@@ -13,9 +13,9 @@
  */
 
 import { getEnv } from "../config/env.js";
-import type { MockupGenerationInput, MockupGenerationResult } from "./openrouterClient.js";
+import type { MockupGenerationInput, MockupGenerationResult } from "./imageProvider.js";
 
-const DEFAULT_MODEL = "gemini-2.5-flash-image";
+const DEFAULT_MODEL = "gemini-3.1-flash-lite";
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 
 function guessMimeType(buffer: Buffer): string {

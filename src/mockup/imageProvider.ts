@@ -1,28 +1,28 @@
 /**
- * Provider switch for AI mockup generation. Testing phase defaults to
- * Gemini (free tier); set MOCKUP_IMAGE_PROVIDER=openrouter to use
- * OpenRouter/Seedream instead. Kept as a single switch point so the rest
- * of the mockup pipeline (generateAi.ts, promptBuilder.ts, conversation
- * flow) never needs to know which backend is active.
+ * Provider switch for AI mockup generation.
+ * Uses Gemini standalone client.
  */
 
-import { getEnv } from "../config/env.js";
-import { generateAiMockup as generateOpenRouterMockup, type MockupGenerationInput, type MockupGenerationResult } from "./openrouterClient.js";
 import { generateGeminiMockup } from "./geminiClient.js";
 
-export type { MockupGenerationInput, MockupGenerationResult };
+export interface MockupGenerationInput {
+  /** Blank garment template (front or back view), PNG/JPEG bytes. */
+  templateImage: Buffer;
+  /** One or more logo images to place on the garment. */
+  logoImages: Buffer[];
+  /** Natural-language description of where each logo goes (see prompt builder). */
+  prompt: string;
+}
+
+export interface MockupGenerationResult {
+  imageBuffer: Buffer;
+  costUsd: number | undefined;
+  model: string;
+}
 
 export async function generateMockupImage(
   input: MockupGenerationInput,
 ): Promise<MockupGenerationResult> {
-  const env = getEnv();
-  const provider = (env.MOCKUP_IMAGE_PROVIDER || "gemini").toLowerCase();
-
-  if (provider === "openrouter") {
-    return generateOpenRouterMockup(input);
-  }
-  if (provider === "gemini") {
-    return generateGeminiMockup(input);
-  }
-  throw new Error(`Unknown MOCKUP_IMAGE_PROVIDER "${provider}". Use "gemini" or "openrouter".`);
+  // Enforce Gemini standalone
+  return generateGeminiMockup(input);
 }
