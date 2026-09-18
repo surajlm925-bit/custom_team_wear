@@ -29,7 +29,11 @@ async function zaptiloFetch(path: string, body: Record<string, unknown>): Promis
 
 /** Strip the "wa:" prefix if present and return bare phone number */
 function phone(to: string): string {
-  return to.startsWith('wa:') ? to.substring(3) : to;
+  let num = to.startsWith('wa:') ? to.substring(3) : to;
+  if (num.startsWith('+')) {
+    num = num.substring(1);
+  }
+  return num;
 }
 
 /** Send a plain text message */
