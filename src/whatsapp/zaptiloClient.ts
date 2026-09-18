@@ -1,10 +1,10 @@
 export class ZaptiloClient {
-  constructor(opts: { apiKey: string, baseUrl: string, phoneNumberId: string }) {}
-  async sendText(phone: string, text: string) {}
-  async sendInteractiveButtons(phone: string, payload: any) {}
-  async sendInteractiveList(phone: string, payload: any) {}
-  async sendImage(phone: string, mediaUrl: string, caption?: string) {}
-  async sendTemplate(phone: string, templateName: string, languageCode: string) {}
+  constructor(_opts: { apiKey: string, baseUrl: string, phoneNumberId: string }) {}
+  async sendText(_phone: string, _text: string): Promise<any> { return {}; }
+  async sendInteractiveButtons(_phone: string, _payload: any): Promise<any> { return {}; }
+  async sendInteractiveList(_phone: string, _payload: any): Promise<any> { return {}; }
+  async sendImage(_phone: string, _mediaUrl: string, _caption?: string): Promise<any> { return {}; }
+  async sendTemplate(_phone: string, _templateName: string, _languageCode: string): Promise<any> { return {}; }
 }
 import { getEnv } from '../config/env.js';
 
