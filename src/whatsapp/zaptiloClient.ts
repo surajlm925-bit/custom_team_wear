@@ -35,14 +35,14 @@ function phone(to: string): string {
 /** Send a plain text message */
 export async function sendMessage(to: string, text: string) {
   console.log(`[zaptiloClient] sendMessage to=${to} text=${text.substring(0, 60)}`);
-  return zaptiloFetch('/api/send', { number: phone(to), message: text });
+  return zaptiloFetch('/api/send', { phone: phone(to), message: text });
 }
 
 /** Send an image with optional caption */
 export async function sendMedia(to: string, mediaUrl: string, caption?: string) {
   console.log(`[zaptiloClient] sendMedia to=${to} url=${mediaUrl}`);
   return zaptiloFetch('/api/send/media', {
-    number: phone(to),
+    phone: phone(to),
     media_url: mediaUrl,
     media_type: 'image',
     ...(caption ? { caption } : {}),
@@ -60,7 +60,7 @@ export async function sendInteractiveButtons(
   const numbered = buttons.map((b, i) => `${i + 1}. ${b.title}`).join('\n');
   const ids = buttons.map((b, i) => `(reply *${i + 1}* for "${b.id}")`).join('  ');
   return zaptiloFetch('/api/send', {
-    number: phone(to),
+    phone: phone(to),
     message: `${text}\n\n${numbered}\n\n_${ids}_`,
   });
 }
@@ -84,13 +84,13 @@ export async function sendInteractiveList(
     }
   }
   lines.push('', '_Reply with the number of your choice_');
-  return zaptiloFetch('/api/send', { number: phone(to), message: lines.join('\n') });
+  return zaptiloFetch('/api/send', { phone: phone(to), message: lines.join('\n') });
 }
 
 /** Send a template message */
 export async function sendTemplate(to: string, templateName: string, languageCode: string = 'en') {
   return zaptiloFetch('/api/send/template', {
-    number: phone(to),
+    phone: phone(to),
     template_name: templateName,
     language: languageCode,
   });
