@@ -44,12 +44,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   console.log("[webhook] headers:", JSON.stringify(req.headers));
   console.log("[webhook] body:", JSON.stringify(req.body));
 
-  // Always 200 immediately to prevent Zaptilo retries
-  res.status(200).send("EVENT_RECEIVED");
-
   const payload = req.body as any;
 
   try {
+    let processed = false;
     // --- Zaptilo native format: { event: "message.received", data: { value: { messages: [...] } } } ---
     // Confirmed from test webhook: data.value contains the Meta Cloud API structure
     if (payload?.event === "message.received" && payload?.data?.value) {
@@ -78,11 +76,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // message shape already matches our internal format
         await handleMessage(chatId, msg);
       }
-      return;
+      processed = true;
     }
 
     // --- Meta Cloud API format (fallback, in case Zaptilo mirrors it) ---
-    if (payload?.object === "whatsapp_business_account" && payload?.entry) {
+    if (!processed && payload?.object === "whatsapp_business_account" && payload?.entry) {
       for (const entry of payload.entry) {
         for (const change of (entry.changes ?? [])) {
           for (const message of (change.value?.messages ?? [])) {
@@ -93,11 +91,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         }
       }
-      return;
+      processed = true;
     }
 
-    console.warn("[webhook] Unrecognised payload format:", JSON.stringify(payload).substring(0, 500));
+    if (!processed) {
+      console.warn("[webhook] Unrecognised payload format:", JSON.stringify(payload).substring(0, 500));
+    }
+    
+    // Send 200 AFTER processing is complete so Vercel doesn't freeze the function early
+    res.status(200).send("EVENT_RECEIVED");
   } catch (err) {
     console.error("[webhook] Error processing message:", err);
+    // Still return 200 to Zaptilo so it doesn't endlessly retry failing messages
+    res.status(200).send("EVENT_RECEIVED");
   }
 }
