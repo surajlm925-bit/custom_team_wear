@@ -1,3 +1,4 @@
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 import { getEnv } from '../config/env.js';
 
 /** Call Zaptilo REST API. Base URL: https://api.zaptilo.ai */
