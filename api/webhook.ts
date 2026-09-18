@@ -50,49 +50,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const payload = req.body as any;
 
   try {
-    // --- Zaptilo native format: { event: "message.received", data: { ... } } ---
-    if (payload?.event === "message.received" && payload?.data) {
-      const data = payload.data;
-      // Zaptilo sends phone numbers without country code prefix sometimes
-      const from: string = String(data.from || data.phone || data.sender || "");
-      const messageId: string = String(data.id || data.message_id || `zap-${Date.now()}`);
-      const messageText: string = data.message || data.text || data.body || "";
+    // --- Zaptilo native format: { event: "message.received", data: { value: { messages: [...] } } } ---
+    // Confirmed from test webhook: data.value contains the Meta Cloud API structure
+    if (payload?.event === "message.received" && payload?.data?.value) {
+      const value = payload.data.value;
+      const messages: any[] = value.messages ?? [];
 
-      console.log(`[webhook] Zaptilo message from=${from} id=${messageId} text=${messageText}`);
+      for (const msg of messages) {
+        const from: string = String(msg.from || "");
+        const messageId: string = String(msg.id || `zap-${Date.now()}`);
+        const messageText: string = msg.text?.body || "";
 
-      if (!from) {
-        console.warn("[webhook] No 'from' field in Zaptilo payload, skipping");
-        return;
+        console.log(`[webhook] Zaptilo message from=${from} id=${messageId} type=${msg.type} text=${messageText}`);
+
+        if (!from) {
+          console.warn("[webhook] No 'from' in message, skipping");
+          continue;
+        }
+
+        const isNew = await claimUpdate(messageId);
+        if (!isNew) {
+          console.log("[webhook] Duplicate message, skipping");
+          continue;
+        }
+
+        const chatId = `wa:${from}`;
+        // message shape already matches our internal format
+        await handleMessage(chatId, msg);
       }
-
-      const isNew = await claimUpdate(messageId);
-      if (!isNew) {
-        console.log("[webhook] Duplicate message, skipping");
-        return;
-      }
-
-      const chatId = `wa:${from}`;
-      // Normalise into our internal message shape
-      const message = {
-        id: messageId,
-        from,
-        text: messageText ? { body: messageText } : undefined,
-        image: data.media_type === "image" ? { id: data.media_id || data.media_url } : undefined,
-        document: data.media_type === "document" ? { id: data.media_id, filename: data.filename } : undefined,
-        interactive: data.interactive_type
-          ? {
-              type: data.interactive_type,
-              button_reply: data.interactive_type === "button_reply"
-                ? { id: data.interactive_id, title: data.interactive_title }
-                : undefined,
-              list_reply: data.interactive_type === "list_reply"
-                ? { id: data.interactive_id, title: data.interactive_title }
-                : undefined,
-            }
-          : undefined,
-      };
-
-      await handleMessage(chatId, message);
       return;
     }
 
