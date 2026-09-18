@@ -1,4 +1,4 @@
-import { sendInteractiveButtons, sendInteractiveList, sendMessage } from '../whatsapp/zaptiloClient';
+import { sendInteractiveButtons, sendInteractiveList, sendMessage } from '../whatsapp/zaptiloClient.js';
 
 export interface MenuOption {
   id: string;
