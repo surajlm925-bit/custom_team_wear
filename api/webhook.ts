@@ -26,7 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const env = getEnv();
 
     if (mode === "subscribe" && token === env.ZAPTILO_WEBHOOK_SECRET) {
-      console.log("Webhook verified");
+      console.log("[webhook] Webhook verified");
       res.status(200).send(challenge);
       return;
     } else {
@@ -40,42 +40,79 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  // Log everything for debugging
-  console.log("INCOMING ZAPTILO WEBHOOK headers:", JSON.stringify(req.headers));
-  console.log("INCOMING ZAPTILO WEBHOOK body:", JSON.stringify(req.body));
+  // Log incoming payload for debugging
+  console.log("[webhook] headers:", JSON.stringify(req.headers));
+  console.log("[webhook] body:", JSON.stringify(req.body));
 
-  const payload = req.body as any; // Cast to any since we don't know the exact structure yet
-  
-  if (payload.object === 'whatsapp_business_account' && payload.entry) {
-    for (const entry of payload.entry) {
-      for (const change of entry.changes) {
-        if (change.value.messages) {
-          for (const message of change.value.messages) {
-            // Deduplicate based on message ID
+  // Always 200 immediately to prevent Zaptilo retries
+  res.status(200).send("EVENT_RECEIVED");
+
+  const payload = req.body as any;
+
+  try {
+    // --- Zaptilo native format: { event: "message.received", data: { ... } } ---
+    if (payload?.event === "message.received" && payload?.data) {
+      const data = payload.data;
+      // Zaptilo sends phone numbers without country code prefix sometimes
+      const from: string = String(data.from || data.phone || data.sender || "");
+      const messageId: string = String(data.id || data.message_id || `zap-${Date.now()}`);
+      const messageText: string = data.message || data.text || data.body || "";
+
+      console.log(`[webhook] Zaptilo message from=${from} id=${messageId} text=${messageText}`);
+
+      if (!from) {
+        console.warn("[webhook] No 'from' field in Zaptilo payload, skipping");
+        return;
+      }
+
+      const isNew = await claimUpdate(messageId);
+      if (!isNew) {
+        console.log("[webhook] Duplicate message, skipping");
+        return;
+      }
+
+      const chatId = `wa:${from}`;
+      // Normalise into our internal message shape
+      const message = {
+        id: messageId,
+        from,
+        text: messageText ? { body: messageText } : undefined,
+        image: data.media_type === "image" ? { id: data.media_id || data.media_url } : undefined,
+        document: data.media_type === "document" ? { id: data.media_id, filename: data.filename } : undefined,
+        interactive: data.interactive_type
+          ? {
+              type: data.interactive_type,
+              button_reply: data.interactive_type === "button_reply"
+                ? { id: data.interactive_id, title: data.interactive_title }
+                : undefined,
+              list_reply: data.interactive_type === "list_reply"
+                ? { id: data.interactive_id, title: data.interactive_title }
+                : undefined,
+            }
+          : undefined,
+      };
+
+      await handleMessage(chatId, message);
+      return;
+    }
+
+    // --- Meta Cloud API format (fallback, in case Zaptilo mirrors it) ---
+    if (payload?.object === "whatsapp_business_account" && payload?.entry) {
+      for (const entry of payload.entry) {
+        for (const change of (entry.changes ?? [])) {
+          for (const message of (change.value?.messages ?? [])) {
             const isNew = await claimUpdate(message.id);
-            if (!isNew) {
-               continue;
-            }
-
+            if (!isNew) continue;
             const chatId = `wa:${message.from}`;
-            
-            try {
-              // Route to manual state machine router
-              await handleMessage(chatId, message);
-              console.log("Received message from", chatId, message);
-            } catch (err) {
-              console.error("Error handling WhatsApp message:", err);
-            }
+            await handleMessage(chatId, message);
           }
         }
       }
+      return;
     }
-  } else if (payload.event === 'message.received') {
-    // Guessing Zaptilo's custom payload format based on the "Message.Received" checkbox
-    console.log("Found Zaptilo custom payload structure!");
-    // We will parse it later once we see the logs
-  }
 
-  // Always return 200 OK to prevent retries
-  res.status(200).send("EVENT_RECEIVED");
+    console.warn("[webhook] Unrecognised payload format:", JSON.stringify(payload).substring(0, 500));
+  } catch (err) {
+    console.error("[webhook] Error processing message:", err);
+  }
 }
