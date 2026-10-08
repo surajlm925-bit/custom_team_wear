@@ -28,6 +28,7 @@ import { getEnv } from "../src/config/env.js";
 import { claimUpdate } from "../src/session/dedupe.js";
 import { BUILD_STAMP } from "../src/config/version.js";
 import { handleMessage } from "../src/bot/index.js";
+import { waitUntil } from "@vercel/functions";
 
 let buildStampLogged = false;
 let signatureWarningLogged = false;
@@ -178,25 +179,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       (payload as any)?.object === "whatsapp_business_account" &&
       (payload as any)?.entry
     ) {
-      for (const entry of (payload as any).entry) {
-        for (const change of (entry.changes ?? [])) {
-          for (const message of (change.value?.messages ?? [])) {
-            console.log(`[webhook] processing message ${message.id}`);
-            const isNew = await claimUpdate(message.id);
-            console.log(`[webhook] claimUpdate returned ${isNew} for ${message.id}`);
-            if (!isNew) continue;
-
-            const from = String(message.from || "");
-            if (!from) continue;
-
-            const chatId = `wa:${from}`;
-            console.log(`[webhook] calling handleMessage for ${chatId}`);
-            await handleMessage(chatId, message);
-            console.log(`[webhook] handleMessage completed for ${chatId}`);
-          }
-        }
-      }
+      // Immediately acknowledge so Emovur/Meta doesn't delay or retry
+      res.status(200).send("EVENT_RECEIVED");
       processed = true;
+
+      waitUntil((async () => {
+        try {
+          for (const entry of (payload as any).entry) {
+            for (const change of (entry.changes ?? [])) {
+              for (const message of (change.value?.messages ?? [])) {
+                console.log(`[webhook] processing message ${message.id}`);
+                const isNew = await claimUpdate(message.id);
+                console.log(`[webhook] claimUpdate returned ${isNew} for ${message.id}`);
+                if (!isNew) continue;
+
+                const from = String(message.from || "");
+                if (!from) continue;
+
+                const chatId = `wa:${from}`;
+                console.log(`[webhook] calling handleMessage for ${chatId}`);
+                await handleMessage(chatId, message);
+                console.log(`[webhook] handleMessage completed for ${chatId}`);
+              }
+            }
+          }
+        } catch (err) {
+          console.error("[webhook] error in background processing:", err);
+        }
+      })());
     }
 
     if (!processed) {
@@ -204,14 +214,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         type: typeof payload,
         keys: payload && typeof payload === "object" ? Object.keys(payload as object) : null,
       });
+      res.status(200).send("EVENT_RECEIVED");
     }
-
-    // Send 200 AFTER processing so Vercel doesn't freeze the function early.
-    res.status(200).send("EVENT_RECEIVED");
   } catch (err) {
     console.error("[webhook] error processing message:", err);
     // Still return 200 to Meta / Emovur so they don't endlessly retry failing messages.
-    res.status(200).send("EVENT_RECEIVED");
+    if (!res.headersSent) {
+      res.status(200).send("EVENT_RECEIVED");
+    }
   }
 }
 
