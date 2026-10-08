@@ -181,14 +181,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       for (const entry of (payload as any).entry) {
         for (const change of (entry.changes ?? [])) {
           for (const message of (change.value?.messages ?? [])) {
+            console.log(`[webhook] processing message ${message.id}`);
             const isNew = await claimUpdate(message.id);
+            console.log(`[webhook] claimUpdate returned ${isNew} for ${message.id}`);
             if (!isNew) continue;
 
             const from = String(message.from || "");
             if (!from) continue;
 
             const chatId = `wa:${from}`;
+            console.log(`[webhook] calling handleMessage for ${chatId}`);
             await handleMessage(chatId, message);
+            console.log(`[webhook] handleMessage completed for ${chatId}`);
           }
         }
       }

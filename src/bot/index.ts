@@ -20,6 +20,7 @@ export async function handleMessage(chatId: string, message: any) {
 
   // Flood control
   const allowed = await checkRateLimit(chatId);
+  console.log(`[bot] rate limit allowed=${allowed}`);
   if (!allowed) {
     await sendMessage(chatId, COPY.floodCooldown).catch(() => {});
     return;
@@ -27,6 +28,7 @@ export async function handleMessage(chatId: string, message: any) {
 
   // Busy lock
   const claimed = await acquireChatLock(chatId);
+  console.log(`[bot] lock claimed=${claimed}`);
   if (!claimed) {
     await sendMessage(chatId, COPY.busyReprompt).catch(() => {});
     return;
@@ -49,7 +51,9 @@ export async function handleMessage(chatId: string, message: any) {
     // ...
 
     // Enter manual state machine
+    console.log(`[bot] calling handleWhatsAppMessage`);
     await handleWhatsAppMessage(chatId, message);
+    console.log(`[bot] handleWhatsAppMessage completed`);
   } catch (err: any) {
     console.error("Unhandled bot error:", err);
     captureException(err);

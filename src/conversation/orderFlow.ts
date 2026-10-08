@@ -17,14 +17,20 @@ export interface WhatsAppContext {
 }
 
 export async function handleWhatsAppMessage(chatId: string, message: any) {
+  console.log(`[orderFlow] MESSAGE OBJECT:`, JSON.stringify(message));
+  console.log(`[orderFlow] message.text is:`, message.text);
   let input = message.text?.body || message.interactive?.button_reply?.id || message.interactive?.list_reply?.id;
   const isImage = !!message.image;
   if (isImage) {
     input = message.image.id;
   }
 
-  if (!input && !isImage) return;
+  if (!input && !isImage) {
+    console.log(`[orderFlow] Empty input and not image, returning early.`);
+    return;
+  }
 
+  console.log(`[orderFlow] Parsed input: "${input}"`);
   const ctx: WhatsAppContext = { chatId, message, input: input.trim() };
   let draft = (await loadDraft(chatId)) || {};
 
@@ -39,7 +45,9 @@ export async function handleWhatsAppMessage(chatId: string, message: any) {
   const step = determineStep(draft);
 
   try {
+    console.log(`[orderFlow] calling processStep for step: ${step}`);
     await processStep(ctx, draft, step);
+    console.log(`[orderFlow] processStep completed`);
   } catch (error) {
     console.error("Error in processStep:", error);
     await sendMessage(chatId, "An error occurred. Please try again.");

@@ -11,20 +11,34 @@ import { getEnv } from '../config/env.js';
 async function metaFetch(path: string, body: Record<string, unknown>): Promise<any> {
   const env = getEnv();
   const url = `${env.META_API_BASE_URL}/${env.META_PHONE_NUMBER_ID}${path}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${env.META_API_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    console.error(`[metaClient] ${path} failed ${res.status}: ${text}`);
-    throw new Error(`Meta API error ${res.status}: ${text}`);
+  console.log(`[metaClient] calling fetch: ${url}`);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 4000);
+  
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.META_API_TOKEN}`,
+        'Content-Type': 'application/json',
+        ...(env.EMOVUR_CONNECTOR_ID ? { 'collector-id': env.EMOVUR_CONNECTOR_ID, 'connector-id': env.EMOVUR_CONNECTOR_ID } : {})
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    const text = await res.text();
+    console.log(`[metaClient] fetch response status: ${res.status}`);
+    if (!res.ok) {
+      console.error(`[metaClient] ${path} failed ${res.status}: ${text}`);
+      throw new Error(`Meta API error ${res.status}: ${text}`);
+    }
+    try { return JSON.parse(text); } catch { return text; }
+  } catch (err) {
+    clearTimeout(timeoutId);
+    console.error(`[metaClient] fetch error:`, err);
+    throw err;
   }
-  try { return JSON.parse(text); } catch { return text; }
 }
 
 /** Strip the "wa:" prefix if present and return bare phone number */
