@@ -12,7 +12,7 @@ import { updateOrderRowStatus } from "../sheets/client.js";
 import { renderConfirmationDm } from "../shared/render.js";
 import { getRedis } from "../session/redisClient.js";
 import { approvePaidGeneration, rejectPaidGeneration } from "../mockup/paidGeneration.js";
-import { sendMessage } from "../whatsapp/zaptiloClient.js";
+import { sendMessage } from "../whatsapp/metaClient.js";
 
 const PROCESSED_TTL_SECONDS = 90 * 24 * 60 * 60; // long enough to safely catch duplicate presses
 
@@ -73,7 +73,7 @@ export async function handleAdminAction(chatId: string, input: string, _message:
     }
 
     // Recover the customer chat id from the context message, or we might need it passed in / retrieved
-    // Actually, in Zaptilo, we don't have the message caption in the callback like in Telegram.
+    // Actually, in Meta Cloud API, we don't have the message caption in the callback like in Telegram.
     // We should fetch the order snapshot from redis or sheets to get customerChatId.
     const redis = getRedis();
     const snapshotStr = await redis.get<any>(`order:${orderId}`);

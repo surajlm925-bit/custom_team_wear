@@ -24,7 +24,7 @@ import { getEnv } from "../src/config/env.js";
 import { loadOrderSnapshot } from "../src/session/orderStore.js";
 import { startMockupGeneration } from "../src/mockup/workflow.js";
 import { notifyAdminsText } from "../src/admin/notify.js";
-import { sendMessage } from "../src/whatsapp/zaptiloClient.js";
+import { sendMessage } from "../src/whatsapp/metaClient.js";
 import { COPY } from "../src/conversation/copy.js";
 
 /** Constant-time secret comparison to avoid leaking match-length via timing. */
@@ -42,7 +42,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const env = getEnv();
-  const expectedSecret = env.INTERNAL_MOCKUP_SECRET || env.ZAPTILO_WEBHOOK_SECRET;
+  // Fail-closed: this endpoint is gated by its OWN dedicated secret. We do NOT
+  // fall back to META_WEBHOOK_SECRET here — that would mean a leaked webhook
+  // secret also lets an attacker trigger our OpenRouter / Gemini generations.
+  // See audit finding C4 (docs/superpowers/specs/2026-10-06-emovur-integration-design.md).
+  if (!env.INTERNAL_MOCKUP_SECRET) {
+    console.error(
+      "INTERNAL_MOCKUP_SECRET is not set; refusing /api/mockup-delivery requests. " +
+        "Set INTERNAL_MOCKUP_SECRET to a long random string distinct from META_WEBHOOK_SECRET.",
+    );
+    res.status(503).send("Service Unavailable");
+    return;
+  }
+  const expectedSecret = env.INTERNAL_MOCKUP_SECRET;
   const providedSecret = req.headers["x-internal-secret"];
   if (typeof providedSecret !== "string" || !secretsMatch(providedSecret, expectedSecret)) {
     console.warn("Rejected /api/mockup-delivery call with invalid or missing internal secret.");

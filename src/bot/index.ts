@@ -4,7 +4,7 @@ import { handleWhatsAppMessage } from "../conversation/orderFlow.js";
 import { checkRateLimit } from "../session/rateLimit.js";
 import { acquireChatLock, releaseChatLock } from "../session/chatLock.js";
 import { COPY } from "../conversation/copy.js";
-import { sendMessage } from "../whatsapp/zaptiloClient.js";
+import { sendMessage } from "../whatsapp/metaClient.js";
 import { handleAdminAction, handleMockupGenAction } from "../admin/actions.js";
 // import { getChatPendingGenerationId } from "../mockup/generationStore.js";
 // import { attachPaymentProof } from "../mockup/paidGeneration.js";

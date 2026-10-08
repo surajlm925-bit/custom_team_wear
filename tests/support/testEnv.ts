@@ -20,10 +20,10 @@ const DEFAULTS: Record<string, string> = {
   SHEET_ID: "test-sheet-id",
   MOCKUP_FREE_PER_MONTH: "1",
   MOCKUP_PAID_PRICE_INR: "20",
-  ZAPTILO_API_KEY: "test",
-  ZAPTILO_BASE_URL: "https://api.zaptilo.com",
-  ZAPTILO_PHONE_NUMBER_ID: "1234567890",
-  ZAPTILO_WEBHOOK_SECRET: "test-webhook-secret",
+  META_API_TOKEN: "test",
+  META_PHONE_NUMBER_ID: "1234567890",
+  META_BUSINESS_ACCOUNT_ID: "0987654321",
+  META_WEBHOOK_SECRET: "test-webhook-secret",
 };
 
 for (const [k, v] of Object.entries(DEFAULTS)) {

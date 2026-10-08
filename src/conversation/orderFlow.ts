@@ -1,6 +1,6 @@
 import { COPY } from "./copy.js";
 import { sendMenu } from "./uiMapper.js";
-import { sendMessage } from "../whatsapp/zaptiloClient.js";
+import { sendMessage } from "../whatsapp/metaClient.js";
 import { loadDraft, saveDraft, clearDraft } from "../session/draftStore.js";
 import { OrderDraft } from "./draft.js";
 import { normalizeIndianPhone, sanitizeCity, sanitizeName } from "../shared/sanitize.js";

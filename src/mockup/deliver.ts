@@ -20,7 +20,7 @@ import { loadGeneration, advanceStatus, recordOutput } from "./generationStore.j
 import { commitFreeGeneration, releaseReservation } from "./quota.js";
 import { notifyAdminsText } from "../admin/notify.js";
 
-import { sendMedia } from "../whatsapp/zaptiloClient.js";
+import { sendMedia } from "../whatsapp/metaClient.js";
 
 /** Extracts the numeric or string WhatsApp chat id. */
 function extractWhatsAppChatId(customerChatId: string): string | null {
@@ -28,18 +28,18 @@ function extractWhatsAppChatId(customerChatId: string): string | null {
   return match ? match[1] : customerChatId;
 }
 
-async function fetchZaptiloMediaBuffer(fileId: string): Promise<Buffer> {
+async function fetchMetaMediaBuffer(fileId: string): Promise<Buffer> {
   const env = getEnv();
   // Step 1: Get media URL from WhatsApp API
-  const metaRes = await fetch(`https://graph.facebook.com/v17.0/${fileId}`, {
-    headers: { Authorization: `Bearer ${env.ZAPTILO_API_KEY}` }
+  const metaRes = await fetch(`https://graph.facebook.com/v20.0/${fileId}`, {
+    headers: { Authorization: `Bearer ${env.META_API_TOKEN}` }
   });
   const meta = await metaRes.json() as { url?: string };
   if (!meta.url) throw new Error("WhatsApp media has no URL");
   
   // Step 2: Download media using the URL and token
   const response = await fetch(meta.url, {
-    headers: { Authorization: `Bearer ${env.ZAPTILO_API_KEY}` }
+    headers: { Authorization: `Bearer ${env.META_API_TOKEN}` }
   });
   if (!response.ok) throw new Error(`Failed to download WhatsApp file (${response.status})`);
   const arrayBuffer = await response.arrayBuffer();
@@ -91,7 +91,7 @@ async function defaultSendPhoto(
   caption: string,
 ): Promise<string | undefined> {
   const result = await sendMedia(chatId, url, caption);
-  // Zaptilo might return message ID, let's just return a placeholder or the id
+  // Meta API returns messages array with id
   return result?.messages?.[0]?.id;
 }
 
@@ -113,7 +113,7 @@ export async function deliverMockupForOrder(
   const compositor = deps.compositor ?? generateDeterministicMockups;
   const blobUploader = deps.blobUploader;
   const sendPhoto = deps.sendPhoto ?? defaultSendPhoto;
-  const fetchLogo = deps.fetchLogo ?? fetchZaptiloMediaBuffer;
+  const fetchLogo = deps.fetchLogo ?? fetchMetaMediaBuffer;
 
   if (!order.logoReceived || order.logos.length === 0) {
     return { delivered: false, reason: "no artwork uploaded" };
@@ -229,7 +229,7 @@ export async function deliverMockupForOrder(
           view: s.view,
           url: s.url,
           pathname: s.pathname,
-          zaptiloMessageId,
+          whatsappMessageId: zaptiloMessageId, // Storing in DB field, we can leave the name or rename it if needed. Actually it uses zaptiloMessageId in DB, let's keep it as zaptiloMessageId unless I update types.ts
           costUsd: 0, // deterministic proof — no per-image AI cost
         }).catch((err) => console.error(`Could not record output for generation ${generationId}:`, err));
       }

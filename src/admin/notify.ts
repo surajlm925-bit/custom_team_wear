@@ -2,7 +2,7 @@ import { getEnv } from "../config/env.js";
 import { renderAdminCard } from "../shared/render.js";
 import type { OrderData } from "../shared/types.js";
 import { saveOrderSnapshot } from "../session/orderStore.js";
-import { sendInteractiveButtons, sendMedia, sendMessage } from "../whatsapp/zaptiloClient.js";
+import { sendInteractiveButtons, sendMedia, sendMessage } from "../whatsapp/metaClient.js";
 
 function adminActionButtons(orderId: string) {
   return [

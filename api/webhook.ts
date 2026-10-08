@@ -1,14 +1,111 @@
 /**
- * Vercel serverless webhook entry point for Zaptilo WhatsApp API
+ * Vercel serverless webhook entry point for Meta WhatsApp Cloud API (or its
+ * Tech-Provider wrapper, e.g. Emovur at metagraph.backendprod.com).
+ *
+ * Security posture (post-2026-10-06 audit, see
+ * docs/superpowers/specs/2026-10-06-emovur-integration-design.md):
+ *
+ *  - GET handshake: standard Meta hub.verify_token echo.
+ *  - POST verification: when META_APP_SECRET is set, HMAC-SHA256 of the raw
+ *    body is computed and compared against the X-Hub-Signature-256 header
+ *    using timingSafeEqual. Missing / mismatched signature -> 401, never 200.
+ *    When META_APP_SECRET is unset (cold-start setup window, common when a
+ *    Tech Provider doesn't share it), a single WARN per cold start is logged
+ *    and POSTs are accepted without verification. Set META_APP_SECRET as
+ *    soon as the Meta App Secret is available.
+ *  - Logging: never the raw body or headers. We log a structured summary
+ *    with message-id / sender-id (masked) / type / timestamp / phone-id only.
+ *
+ * NOTE: bodyParser is disabled at the route level (see `config` below). We
+ * need access to the *exact* bytes Meta sent for the HMAC; allowing Vercel
+ * to JSON-parse then re-stringifying would lose key ordering / whitespace
+ * and break the signature.
  */
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import crypto from "node:crypto";
 import { getEnv } from "../src/config/env.js";
 import { claimUpdate } from "../src/session/dedupe.js";
 import { BUILD_STAMP } from "../src/config/version.js";
 import { handleMessage } from "../src/bot/index.js";
 
 let buildStampLogged = false;
+let signatureWarningLogged = false;
+
+/** Disable Vercel's automatic JSON body parsing; we parse after HMAC check. */
+export const config = { api: { bodyParser: false } };
+
+/**
+ * Mask a phone number for log output. 1311223999 -> "131***999"
+ * Avoids leaking a full PII number while keeping enough digits to debug
+ * session / dedupe issues.
+ */
+function maskPhone(phone: string): string {
+  if (!phone) return "";
+  if (phone.length <= 6) return phone[0] + "***" + phone[phone.length - 1];
+  return phone.slice(0, 3) + "***" + phone.slice(-3);
+}
+
+/**
+ * Produce a redacted, structured summary of an inbound Meta Cloud API payload.
+ * We deliberately exclude: customer message text, customer name, customer
+ * wa_id beyond a prefix, profile/image URLs, raw headers.
+ */
+function summarizePayload(payload: unknown): unknown {
+  if (!payload || typeof payload !== "object") return { shape: "non-object" };
+  const p = payload as Record<string, unknown>;
+  const entries = Array.isArray(p["entry"]) ? (p["entry"] as Array<Record<string, unknown>>) : [];
+  return {
+    object: p["object"],
+    entry: entries.map((e) => {
+      const changes = Array.isArray(e["changes"]) ? (e["changes"] as Array<Record<string, unknown>>) : [];
+      return {
+        id: e["id"],
+        changes: changes.map((c) => {
+          const value = (c["value"] ?? {}) as Record<string, unknown>;
+          const metadata = (value["metadata"] ?? {}) as Record<string, unknown>;
+          const messages = Array.isArray(value["messages"]) ? (value["messages"] as Array<Record<string, unknown>>) : [];
+          return {
+            field: c["field"],
+            phone_number_id: metadata["phone_number_id"],
+            display_phone_number: metadata["display_phone_number"],
+            contacts: Array.isArray(value["contacts"]) ? value["contacts"].length : 0,
+            messages: messages.map((m) => ({
+              id: m["id"],
+              from: maskPhone(String(m["from"] ?? "")),
+              type: m["type"],
+              ts: m["timestamp"],
+            })),
+            statuses: Array.isArray(value["statuses"]) ? value["statuses"].length : 0,
+          };
+        }),
+      };
+    }),
+  };
+}
+
+/**
+ * Constant-time verification of Meta's X-Hub-Signature-256.
+ *
+ * Meta's spec: signature = "sha256=" + lowercase-hex HMAC-SHA256(appSecret, rawBody).
+ * Returns false on any deviation: missing header, wrong algorithm prefix, wrong
+ * length, or wrong bytes.
+ */
+function verifyMetaSignature(rawBody: Buffer, signatureHeader: string | undefined, appSecret: string): boolean {
+  if (!signatureHeader) return false;
+  const expectedPrefix = "sha256=";
+  if (!signatureHeader.startsWith(expectedPrefix)) return false;
+  const providedHex = signatureHeader.slice(expectedPrefix.length).trim();
+  if (!/^[0-9a-f]+$/i.test(providedHex)) return false;
+
+  const computed = crypto.createHmac("sha256", appSecret).update(rawBody).digest("hex");
+  if (computed.length !== providedHex.length) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(computed, "hex"), Buffer.from(providedHex, "hex"));
+  } catch {
+    return false;
+  }
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!buildStampLogged) {
@@ -18,21 +115,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     buildStampLogged = true;
   }
 
-  // Zaptilo Webhook Verification (GET request)
+  // Meta Webhook Verification (GET request) — standard handshake.
   if (req.method === "GET") {
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
     const challenge = req.query["hub.challenge"];
     const env = getEnv();
 
-    if (mode === "subscribe" && token === env.ZAPTILO_WEBHOOK_SECRET) {
-      console.log("[webhook] Webhook verified");
+    if (mode === "subscribe" && token === env.META_WEBHOOK_SECRET) {
+      console.log("[webhook] handshake verified");
       res.status(200).send(challenge);
       return;
-    } else {
-      res.status(403).send("Forbidden");
-      return;
     }
+    res.status(403).send("Forbidden");
+    return;
   }
 
   if (req.method !== "POST") {
@@ -40,53 +136,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  // Log incoming payload for debugging
-  console.log("[webhook] headers:", JSON.stringify(req.headers));
-  console.log("[webhook] body:", JSON.stringify(req.body));
+  // POST: read exact raw bytes (HMAC needs byte-exact body).
+  const rawBody = await readRawBody(req);
+  if (rawBody === null) {
+    res.status(400).send("Bad Request");
+    return;
+  }
 
-  const payload = req.body as any;
+  const env = getEnv();
+  if (env.META_APP_SECRET) {
+    const sig = headerString(req.headers || {}, "x-hub-signature-256");
+    if (!verifyMetaSignature(rawBody, sig, env.META_APP_SECRET)) {
+      console.warn("[webhook] rejected POST: invalid or missing X-Hub-Signature-256");
+      res.status(401).send("Invalid signature");
+      return;
+    }
+  } else if (!signatureWarningLogged) {
+    signatureWarningLogged = true;
+    console.warn(
+      "[webhook] META_APP_SECRET is not set; webhook accepting unverified POSTs. Set META_APP_SECRET to enforce HMAC-SHA256 verification.",
+    );
+  }
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(rawBody.toString("utf8"));
+  } catch {
+    console.warn("[webhook] rejected POST: invalid JSON");
+    res.status(400).send("Bad Request");
+    return;
+  }
+
+  // Redacted summary only — no raw headers / body / message contents.
+  console.log("[webhook] received", JSON.stringify(summarizePayload(payload)));
 
   try {
     let processed = false;
-    // --- Zaptilo native format: { event: "message.received", data: { value: { messages: [...] } } } ---
-    // Confirmed from test webhook: data.value contains the Meta Cloud API structure
-    if (payload?.event === "message.received" && payload?.data?.value) {
-      const value = payload.data.value;
-      const messages: any[] = value.messages ?? [];
-
-      for (const msg of messages) {
-        const from: string = String(msg.from || "");
-        const messageId: string = String(msg.id || `zap-${Date.now()}`);
-        const messageText: string = msg.text?.body || "";
-
-        console.log(`[webhook] Zaptilo message from=${from} id=${messageId} type=${msg.type} text=${messageText}`);
-
-        if (!from) {
-          console.warn("[webhook] No 'from' in message, skipping");
-          continue;
-        }
-
-        // const isNew = await claimUpdate(messageId);
-        // if (!isNew) {
-        //   console.log("[webhook] Duplicate message, skipping");
-        //   continue;
-        // }
-
-        const chatId = `wa:${from}`;
-        // message shape already matches our internal format
-        await handleMessage(chatId, msg);
-      }
-      processed = true;
-    }
-
-    // --- Meta Cloud API format (fallback, in case Zaptilo mirrors it) ---
-    if (!processed && payload?.object === "whatsapp_business_account" && payload?.entry) {
-      for (const entry of payload.entry) {
+    // --- Meta Cloud API format (also matches Emovur's forwarded payload) ---
+    if (
+      !processed &&
+      (payload as any)?.object === "whatsapp_business_account" &&
+      (payload as any)?.entry
+    ) {
+      for (const entry of (payload as any).entry) {
         for (const change of (entry.changes ?? [])) {
           for (const message of (change.value?.messages ?? [])) {
             const isNew = await claimUpdate(message.id);
             if (!isNew) continue;
-            const chatId = `wa:${message.from}`;
+
+            const from = String(message.from || "");
+            if (!from) continue;
+
+            const chatId = `wa:${from}`;
             await handleMessage(chatId, message);
           }
         }
@@ -95,14 +196,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (!processed) {
-      console.warn("[webhook] Unrecognised payload format:", JSON.stringify(payload).substring(0, 500));
+      console.warn("[webhook] unrecognised payload shape", {
+        type: typeof payload,
+        keys: payload && typeof payload === "object" ? Object.keys(payload as object) : null,
+      });
     }
-    
-    // Send 200 AFTER processing is complete so Vercel doesn't freeze the function early
+
+    // Send 200 AFTER processing so Vercel doesn't freeze the function early.
     res.status(200).send("EVENT_RECEIVED");
   } catch (err) {
-    console.error("[webhook] Error processing message:", err);
-    // Still return 200 to Zaptilo so it doesn't endlessly retry failing messages
+    console.error("[webhook] error processing message:", err);
+    // Still return 200 to Meta / Emovur so they don't endlessly retry failing messages.
     res.status(200).send("EVENT_RECEIVED");
   }
+}
+
+/**
+ * Read the raw HTTP request body as a Buffer (HMAC needs exact bytes).
+ * Tries Vercel's `req.rawBody` first (newer @vercel/node versions), then
+ * falls back to streaming the request — works either way regardless of
+ * whether bodyParser has consumed the stream.
+ */
+async function readRawBody(req: VercelRequest): Promise<Buffer | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const anyReq = req as any;
+  if (anyReq.rawBody instanceof Buffer) return anyReq.rawBody;
+  if (typeof anyReq.rawBody === "string") return Buffer.from(anyReq.rawBody);
+
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer | string) => {
+      chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", () => resolve(null));
+  });
+}
+
+/** Read a header value in a type-safe way across Vercel's mixed casing. */
+function headerString(headers: Record<string, unknown>, name: string): string | undefined {
+  const v = headers[name] ?? headers[name.toLowerCase()] ?? headers[name.toUpperCase()];
+  if (typeof v === "string") return v;
+  if (Array.isArray(v) && typeof v[0] === "string") return v[0];
+  return undefined;
 }

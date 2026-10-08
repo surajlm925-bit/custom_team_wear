@@ -27,7 +27,7 @@ import {
   claimDecision,
 } from "./generationStore.js";
 import { triggerMockupDelivery } from "./deliverTrigger.js";
-import { sendMessage, sendInteractiveButtons } from "../whatsapp/zaptiloClient.js";
+import { sendMessage, sendInteractiveButtons } from "../whatsapp/metaClient.js";
 
 function decisionButtons(generationId: string) {
   return [

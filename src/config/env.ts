@@ -17,12 +17,42 @@ function optional(name: string): string | undefined {
   return value && value.trim() !== "" ? value : undefined;
 }
 
+/**
+ * Default outbound API base. Meta's Cloud API uses graph.facebook.com; an
+ * approved Tech Provider (e.g. Emovur) can be substituted by overriding
+ * META_API_BASE_URL in the deployment environment. The URL is normalised
+ * to strip trailing slashes so call sites can append paths without
+ * double-slashes.
+ */
+const DEFAULT_META_API_BASE_URL = "https://graph.facebook.com";
+
 export interface Env {
   CHANNEL: "whatsapp";
-  ZAPTILO_API_KEY: string;
-  ZAPTILO_BASE_URL: string;
-  ZAPTILO_PHONE_NUMBER_ID: string;
-  ZAPTILO_WEBHOOK_SECRET: string;
+  META_API_TOKEN: string;
+  META_PHONE_NUMBER_ID: string;
+  META_BUSINESS_ACCOUNT_ID: string;
+  META_WEBHOOK_SECRET: string;
+  /**
+   * Base URL for outbound Cloud API calls. Defaults to Meta's graph.facebook.com.
+   * When using a Tech Provider (e.g. Emovur at https://metagraph.backendprod.com),
+   * set META_API_BASE_URL to the provider's wrapper endpoint — the rest of the
+   * URL is built as `${META_API_BASE_URL}/${META_PHONE_NUMBER_ID}/messages`.
+   *
+   * Must be HTTPS. CSP / webhook configuration is unchanged either way.
+   */
+  META_API_BASE_URL: string;
+  /**
+   * Meta App Secret — used to verify the X-Hub-Signature-256 HMAC-SHA256
+   * signature on inbound webhook POSTs (Meta's standard).
+   *
+   * Optional because Tech Providers (e.g. Emovur) may not expose the Meta
+   * app secret directly to their customers. When UNSET the webhook logs
+   * a WARN once per cold start and accepts unverified POSTs — this is a
+   * temporary posture. Get the app secret from Meta App Dashboard ->
+   * Settings -> Basic -> App Secret (or ask the Tech Provider) and set
+   * META_APP_SECRET as soon as practical.
+   */
+  META_APP_SECRET?: string;
   ADMIN_CHAT_IDS: string[];
   MERCHANT_VPA: string;
   STATIC_QR_URL: string;
@@ -35,7 +65,12 @@ export interface Env {
   MOCKUP_IMAGE_MODEL?: string;
   GEMINI_API_KEY?: string;
   MOCKUP_IMAGE_PROVIDER?: string;
-  /** Shared secret protecting the internal /api/mockup-delivery endpoint (see src/mockup/deliverTrigger.ts). Falls back to WEBHOOK_SECRET if unset. */
+  /**
+   * Shared secret protecting the internal /api/mockup-delivery endpoint
+   * (see src/mockup/deliverTrigger.ts). MUST be a separate value from
+   * META_WEBHOOK_SECRET — different trust boundary (internal paid-AI
+   * trigger vs internet-facing webhook). Fail-closed when unset.
+   */
   INTERNAL_MOCKUP_SECRET?: string;
   /** Explicit override for the base URL used to call /api/mockup-delivery. Falls back to Vercel's system env vars. */
   PUBLIC_BASE_URL?: string;
@@ -91,12 +126,27 @@ export function getEnv(): Env {
     throw new Error("ADMIN_CHAT_IDS must contain at least one chat id.");
   }
 
+  const apiBaseUrlRaw = (process.env["META_API_BASE_URL"] ?? DEFAULT_META_API_BASE_URL).trim();
+  // Normalise: strip trailing slashes so callers can append "/<phone_id>/messages"
+  // without accidentally producing "//messages".
+  const apiBaseUrl = apiBaseUrlRaw.replace(/\/+$/, "");
+  if (!/^https:\/\//i.test(apiBaseUrl)) {
+    throw new Error(
+      `META_API_BASE_URL must be an https:// URL (got "${apiBaseUrlRaw}"). ` +
+        `Refusing to send the bearer token over a non-TLS endpoint.`,
+    );
+  }
+
+  const metaAppSecret = optional("META_APP_SECRET");
+
   cached = {
     CHANNEL: "whatsapp",
-    ZAPTILO_API_KEY: required("ZAPTILO_API_KEY"),
-    ZAPTILO_BASE_URL: required("ZAPTILO_BASE_URL"),
-    ZAPTILO_PHONE_NUMBER_ID: required("ZAPTILO_PHONE_NUMBER_ID"),
-    ZAPTILO_WEBHOOK_SECRET: required("ZAPTILO_WEBHOOK_SECRET"),
+    META_API_TOKEN: required("META_API_TOKEN"),
+    META_PHONE_NUMBER_ID: required("META_PHONE_NUMBER_ID"),
+    META_BUSINESS_ACCOUNT_ID: required("META_BUSINESS_ACCOUNT_ID"),
+    META_WEBHOOK_SECRET: required("META_WEBHOOK_SECRET"),
+    META_API_BASE_URL: apiBaseUrl,
+    META_APP_SECRET: metaAppSecret,
     ADMIN_CHAT_IDS: adminChatIds,
     MERCHANT_VPA: required("MERCHANT_VPA"),
     STATIC_QR_URL: required("STATIC_QR_URL"),

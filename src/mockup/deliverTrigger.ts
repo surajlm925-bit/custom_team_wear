@@ -51,7 +51,7 @@ export async function triggerMockupDelivery(orderId: string): Promise<void> {
   }
 
   const env = getEnv();
-  const secret = env.INTERNAL_MOCKUP_SECRET || env.ZAPTILO_WEBHOOK_SECRET;
+  const secret = env.INTERNAL_MOCKUP_SECRET || env.META_WEBHOOK_SECRET;
   try {
     const response = await fetch(`${baseUrl}/api/mockup-delivery`, {
       method: "POST",

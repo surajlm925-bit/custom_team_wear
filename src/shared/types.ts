@@ -99,8 +99,8 @@ export interface MockupOutputImage {
   url?: string;
   /** Blob object pathname (stable id) when stored. */
   pathname?: string;
-  /** If delivered successfully, the Zaptilo message ID. */
-  zaptiloMessageId?: string;
+  /** If delivered successfully, the WhatsApp message ID. */
+  whatsappMessageId?: string;
   /** Provider cost in USD for this image, when reported. */
   costUsd?: number;
 }
@@ -133,7 +133,7 @@ export interface MockupGeneration {
   logos: LogoUpload[];
   /** Durably-stored output images (one per produced view). */
   outputs: MockupOutputImage[];
-  /** Zaptilo message ID of the customer's payment proof (paid generations only). */
+  /** WhatsApp message ID of the customer's payment proof (paid generations only). */
   paymentProofMessageId?: string;
   /** Admin chat id that approved/rejected (paid generations only). */
   decidedByAdminChatId?: string;
