@@ -279,6 +279,26 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
         { id: "timeline:flexible", title: "Flexible" }
       ]);
       break;
+    case "tier":
+    case "catalogFabric":
+    case "catalogQuality":
+    case "catalogColor":
+    case "printMethod":
+    case "logoPlacement":
+    case "mockupDecision":
+      // Auto-advance skipped steps for this mock implementation
+      draft.tier = "standard";
+      draft.fabric = "polyester";
+      draft.qualityOptionId = "standard";
+      draft.colorName = "Black";
+      draft.printMethod = "screen_print";
+      draft.logoReceived = false;
+      draft.logos = [];
+      draft.mockupDecision = "skip";
+      await saveDraft(chatId, draft);
+      // Recursively call to get the payment prompt
+      await promptNext(chatId, draft);
+      break;
     case "payment":
       await sendMessage(chatId, "Thank you! Please send a screenshot of your payment.");
       // We would normally generate QR code here
