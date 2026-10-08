@@ -10,7 +10,7 @@ import { getEnv } from '../config/env.js';
  */
 async function metaFetch(path: string, body: Record<string, unknown>): Promise<any> {
   const env = getEnv();
-  const url = `${env.META_API_BASE_URL}/${env.META_PHONE_NUMBER_ID}${path}`;
+  const url = `${env.META_API_BASE_URL}/v20.0/${env.META_PHONE_NUMBER_ID}${path}`;
   console.log(`[metaClient] calling fetch: ${url}`);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 4000);
