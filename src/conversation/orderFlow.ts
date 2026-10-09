@@ -76,8 +76,16 @@ function determineStep(draft: OrderDraft): string {
     if (!draft.qualityOptionId) return "catalogQuality";
     if (!draft.colorName) return "catalogColor";
     if (!draft.printMethod) return "printMethod";
-    
-    if (draft.logoReceived === undefined) return "logoPlacement"; // or upload
+    if (draft.logoReceived === undefined) {
+      if (!draft.logos || draft.logos.length === 0) {
+        return "logoPlacement";
+      }
+      const lastLogo = draft.logos[draft.logos.length - 1];
+      if (!lastLogo.fileId) {
+        return "logoUpload";
+      }
+      return "logoMore";
+    }
   }
 
   if (!draft.mockupDecision && draft.logoReceived && draft.logos && draft.logos.length > 0) return "mockupDecision";
@@ -187,33 +195,117 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
       }
       break;
 
-    // We will shortcut tier, fabric, printMethod and skip straight to payment for this migration demo
-    // In a full implementation, you'd map all S5-S10 steps here.
     case "tier":
-    case "catalogFabric":
-    case "catalogQuality":
-    case "catalogColor":
-    case "printMethod":
-    case "logoPlacement":
-    case "mockupDecision":
-      // Simplified mock transition to payment
-      draft.tier = "standard";
-      draft.fabric = "polyester";
-      draft.qualityOptionId = "standard";
-      draft.colorName = "Black";
-      draft.printMethod = "screen_print";
-      draft.logoReceived = false;
-      draft.logos = [];
-      draft.mockupDecision = "skip";
-      
-      // The below comments are structural markers for mockupTiming.test.ts
-      // nextOrderId()
-      // triggerMockupDelivery(order.orderId)
-      // S11 Payment
-      // generateUpiQrPng(env.MERCHANT_VPA
+      if (["tier:basic", "tier:standard", "tier:premium"].includes(input)) {
+        draft.tier = input.replace("tier:", "") as any;
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft);
+      } else {
+        await promptNext(chatId, draft, true);
+      }
+      break;
 
+    case "catalogFabric":
+      if (["fabric:cotton", "fabric:polyester"].includes(input)) {
+        draft.fabric = input.replace("fabric:", "") as any;
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft);
+      } else {
+        await promptNext(chatId, draft, true);
+      }
+      break;
+
+    case "catalogQuality":
+      // Auto-skip quality since we use a simplified flow
+      draft.qualityOptionId = "standard";
       await saveDraft(chatId, draft);
       await promptNext(chatId, draft);
+      break;
+
+    case "catalogColor":
+      if (["color:black", "color:grey", "color:navy", "color:royal", "color:white"].includes(input)) {
+        const colorMap: Record<string, string> = {
+          "color:black": "Black",
+          "color:grey": "Charcoal Grey",
+          "color:navy": "Navy Blue",
+          "color:royal": "Royal Blue",
+          "color:white": "White"
+        };
+        draft.colorName = colorMap[input];
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft);
+      } else {
+        await promptNext(chatId, draft, true);
+      }
+      break;
+
+    case "printMethod":
+      if (["branding:print", "branding:embroidery"].includes(input)) {
+        draft.printMethod = input === "branding:print" ? "screen_print" : "embroidery";
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft);
+      } else {
+        await promptNext(chatId, draft, true);
+      }
+      break;
+
+    case "logoPlacement":
+      if (input === "logo:skip") {
+        draft.logoReceived = false;
+        draft.logos = [];
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft);
+      } else if (input.startsWith("placement:")) {
+        const placement = input.replace("placement:", "");
+        // We temporarily store the selected placement, waiting for upload
+        // We will store it in catalogGroupId just as a temporary hack, or just save it in a transient state.
+        // Actually, draft.logos doesn't have the image yet. We can push an incomplete logo object.
+        draft.logos = draft.logos || [];
+        draft.logos.push({ placement: placement as any, fileId: "" });
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft); // This will map to "logoUpload"
+      } else {
+        await promptNext(chatId, draft, true);
+      }
+      break;
+
+    case "logoUpload":
+      if (ctx.message.image) {
+        const lastLogo = draft.logos![draft.logos!.length - 1];
+        lastLogo.fileId = input; // image id
+        draft.logoReceived = true;
+        await saveDraft(chatId, draft);
+        // After upload, prompt for more logos
+        // We use a dummy step for this
+        await promptNext(chatId, draft); // Maps to "logoMore"
+      } else {
+        await sendMessage(chatId, COPY.logoUploadPrompt);
+      }
+      break;
+      
+    case "logoMore":
+      if (input === "logo:more") {
+        // user wants more logos, remove the "logoReceived" flag so determineStep goes back to logoPlacement
+        draft.logoReceived = undefined;
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft);
+      } else if (input === "logo:done") {
+        // user is done
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft);
+      } else {
+        await promptNext(chatId, draft, true);
+      }
+      break;
+
+    case "mockupDecision":
+      if (["mockup:generate", "mockup:skip"].includes(input)) {
+        draft.mockupDecision = input.replace("mockup:", "") as any;
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft);
+      } else {
+        await promptNext(chatId, draft, true);
+      }
       break;
 
     case "payment":
@@ -280,24 +372,60 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
       ]);
       break;
     case "tier":
+      await sendMenu(chatId, COPY.welcome, [
+        { id: "tier:basic", title: "Basic · from ₹169/pc" },
+        { id: "tier:standard", title: "Standard · from ₹219/pc" },
+        { id: "tier:premium", title: "Premium Branded · from ₹499/pc" }
+      ]);
+      break;
     case "catalogFabric":
+      await sendMenu(chatId, COPY.fabricAsk, [
+        { id: "fabric:cotton", title: "100% Cotton" },
+        { id: "fabric:polyester", title: "Polyester (Dry Fit)" }
+      ]);
+      break;
     case "catalogQuality":
+      // We auto-skip this in processStep, so it shouldn't be reached
+      break;
     case "catalogColor":
+      await sendMenu(chatId, "Now choose your garment colour:", [
+        { id: "color:black", title: "Black" },
+        { id: "color:grey", title: "Charcoal Grey" },
+        { id: "color:navy", title: "Navy Blue" },
+        { id: "color:royal", title: "Royal Blue" },
+        { id: "color:white", title: "White" }
+      ]);
+      break;
     case "printMethod":
+      await sendMenu(chatId, COPY.brandingTypeAsk, [
+        { id: "branding:print", title: "Printing (Screen / DTF)" },
+        { id: "branding:embroidery", title: "Embroidery" }
+      ]);
+      break;
     case "logoPlacement":
+      await sendMenu(chatId, COPY.placementAsk, [
+        { id: "placement:left_chest", title: "Left Chest" },
+        { id: "placement:centre_front", title: "Centre Front" },
+        { id: "placement:upper_back", title: "Upper Back" },
+        { id: "placement:left_sleeve", title: "Left Sleeve" },
+        { id: "placement:right_sleeve", title: "Right Sleeve" },
+        { id: "logo:skip", title: "Skip — no artwork yet" }
+      ], "View Placements");
+      break;
+    case "logoUpload":
+      await sendMessage(chatId, COPY.logoUploadPrompt);
+      break;
+    case "logoMore":
+      await sendMenu(chatId, COPY.addAnotherLogoAsk(draft.logos!.length), [
+        { id: "logo:more", title: "Add another logo" },
+        { id: "logo:done", title: "No more — continue" }
+      ]);
+      break;
     case "mockupDecision":
-      // Auto-advance skipped steps for this mock implementation
-      draft.tier = "standard";
-      draft.fabric = "polyester";
-      draft.qualityOptionId = "standard";
-      draft.colorName = "Black";
-      draft.printMethod = "screen_print";
-      draft.logoReceived = false;
-      draft.logos = [];
-      draft.mockupDecision = "skip";
-      await saveDraft(chatId, draft);
-      // Recursively call to get the payment prompt
-      await promptNext(chatId, draft);
+      await sendMenu(chatId, COPY.mockupOfferAsk, [
+        { id: "mockup:generate", title: "Generate my mockup" },
+        { id: "mockup:skip", title: "Skip — go to my quote" }
+      ]);
       break;
     case "payment":
       await sendMessage(chatId, "Thank you! Please send a screenshot of your payment.");
