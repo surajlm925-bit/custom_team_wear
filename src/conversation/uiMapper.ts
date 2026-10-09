@@ -18,8 +18,15 @@ export async function sendMenu(to: string, text: string, options: MenuOption[], 
   if (options.length <= 3) {
     return sendInteractiveButtons(to, text, options.map(o => ({ id: o.id, title: o.title })));
   } else {
-    // For lists, we put everything in one section for now
+    // For lists, we must limit to 10 rows per section for WhatsApp API
     const rows = options.map(o => ({ id: o.id, title: o.title, description: o.description }));
-    return sendInteractiveList(to, text, listButtonText, [{ rows }]);
+    const sections = [];
+    for (let i = 0; i < rows.length; i += 10) {
+      sections.push({
+        title: rows.length > 10 ? `Options (${i + 1}-${Math.min(i + 10, rows.length)})` : undefined,
+        rows: rows.slice(i, i + 10)
+      });
+    }
+    return sendInteractiveList(to, text, listButtonText, sections);
   }
 }

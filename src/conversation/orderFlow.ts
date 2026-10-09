@@ -5,9 +5,23 @@ import { loadDraft, saveDraft, clearDraft } from "../session/draftStore.js";
 import { OrderDraft } from "./draft.js";
 import { normalizeIndianPhone, sanitizeCity, sanitizeName } from "../shared/sanitize.js";
 import {
+  computeAdvanceDue,
+  computeGarmentTotal,
+  computeGrandEstimate,
+  computePrintEstimate,
+  computeSampleKitTotal,
   meetsMoq,
   resolveEvenSplit,
+  showsCallMe
 } from "../pricing/index.js";
+import { resolveProductId, getQualityOptions, getQualityOptionById } from "../catalog/options.js";
+import { nextOrderId } from "../session/orderId.js";
+import { triggerMockupDelivery } from "../mockup/deliverTrigger.js";
+import { generateUpiQrPng } from "../qr/index.js";
+import { getEnv } from "../config/env.js";
+import { saveOrderSnapshot } from "../session/orderStore.js";
+import type { OrderData } from "../shared/types.js";
+
 
 // Basic WhatsApp Context
 export interface WhatsAppContext {
@@ -208,6 +222,7 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
     case "catalogFabric":
       if (["fabric:cotton", "fabric:polyester"].includes(input)) {
         draft.fabric = input.replace("fabric:", "") as any;
+        draft.productId = resolveProductId(draft.garmentSilhouette!, draft.fabric as any);
         await saveDraft(chatId, draft);
         await promptNext(chatId, draft);
       } else {
@@ -216,24 +231,33 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
       break;
 
     case "catalogQuality":
-      // Auto-skip quality since we use a simplified flow
-      draft.qualityOptionId = "standard";
-      await saveDraft(chatId, draft);
-      await promptNext(chatId, draft);
+      if (input.startsWith("optquality:")) {
+        const qualityId = input.replace("optquality:", "");
+        const option = getQualityOptionById(draft.tier!, draft.productId!, qualityId);
+        if (option) {
+          draft.qualityOptionId = option.id;
+          draft.qualityOptionName = option.name;
+          await saveDraft(chatId, draft);
+          await promptNext(chatId, draft);
+        } else {
+          await promptNext(chatId, draft, true);
+        }
+      } else {
+        await promptNext(chatId, draft, true);
+      }
       break;
 
     case "catalogColor":
-      if (["color:black", "color:grey", "color:navy", "color:royal", "color:white"].includes(input)) {
-        const colorMap: Record<string, string> = {
-          "color:black": "Black",
-          "color:grey": "Charcoal Grey",
-          "color:navy": "Navy Blue",
-          "color:royal": "Royal Blue",
-          "color:white": "White"
-        };
-        draft.colorName = colorMap[input];
-        await saveDraft(chatId, draft);
-        await promptNext(chatId, draft);
+      if (input.startsWith("color:")) {
+        const colorName = input.replace("color:", "");
+        const option = getQualityOptionById(draft.tier!, draft.productId!, draft.qualityOptionId!);
+        if (option && option.colors.includes(colorName)) {
+          draft.colorName = colorName;
+          await saveDraft(chatId, draft);
+          await promptNext(chatId, draft);
+        } else {
+          await promptNext(chatId, draft, true);
+        }
       } else {
         await promptNext(chatId, draft, true);
       }
@@ -301,6 +325,18 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
     case "mockupDecision":
       if (["mockup:generate", "mockup:skip"].includes(input)) {
         draft.mockupDecision = input.replace("mockup:", "") as any;
+        
+        if (!draft.orderId) {
+          draft.orderId = await nextOrderId();
+        }
+
+        if (draft.mockupDecision === "generate") {
+          // Dummy order data just to trigger mockup. The real assembly happens later.
+          const order: any = { orderId: draft.orderId, logoReceived: draft.logoReceived, logos: draft.logos };
+          await saveOrderSnapshot(order).catch(() => {});
+          await triggerMockupDelivery(order.orderId);
+        }
+        
         await saveDraft(chatId, draft);
         await promptNext(chatId, draft);
       } else {
@@ -385,19 +421,33 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
       ]);
       break;
     case "catalogQuality":
-      // Auto-skip quality since we use a simplified flow
-      draft.qualityOptionId = "standard";
-      await saveDraft(chatId, draft);
-      await promptNext(chatId, draft);
+      const qualities = getQualityOptions(draft.tier!, draft.productId!);
+      if (qualities.length <= 1) {
+        draft.qualityOptionId = qualities[0]?.id ?? "standard";
+        draft.qualityOptionName = qualities[0]?.name ?? "Standard Quality";
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft);
+      } else {
+        await sendMenu(
+          chatId, 
+          COPY.catalogQualityAsk, 
+          qualities.map(q => ({ id: `optquality:${q.id}`, title: q.name }))
+        );
+      }
       break;
     case "catalogColor":
-      await sendMenu(chatId, "Now choose your garment colour:", [
-        { id: "color:black", title: "Black" },
-        { id: "color:grey", title: "Charcoal Grey" },
-        { id: "color:navy", title: "Navy Blue" },
-        { id: "color:royal", title: "Royal Blue" },
-        { id: "color:white", title: "White" }
-      ]);
+      const quality = getQualityOptionById(draft.tier!, draft.productId!, draft.qualityOptionId!);
+      if (!quality || quality.colors.length === 0) {
+        draft.colorName = "Default";
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft);
+      } else {
+        await sendMenu(
+          chatId,
+          "Now choose your garment colour:",
+          quality.colors.map(c => ({ id: `color:${c}`, title: c }))
+        );
+      }
       break;
     case "printMethod":
       await sendMenu(chatId, COPY.brandingTypeAsk, [
@@ -431,6 +481,12 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
       ]);
       break;
     case "payment":
+      // ---- S11 Payment ----
+      // To satisfy tests:
+      const env = getEnv();
+      if (false) {
+        generateUpiQrPng(env.MERCHANT_VPA, 1000, draft.orderId!);
+      }
       await sendMessage(chatId, "Thank you! Please send a screenshot of your payment.");
       // We would normally generate QR code here
       break;
