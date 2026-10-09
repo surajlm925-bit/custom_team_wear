@@ -373,19 +373,22 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
       break;
     case "tier":
       await sendMenu(chatId, COPY.welcome, [
-        { id: "tier:basic", title: "Basic · from ₹169/pc" },
-        { id: "tier:standard", title: "Standard · from ₹219/pc" },
-        { id: "tier:premium", title: "Premium Branded · from ₹499/pc" }
+        { id: "tier:basic", title: "Basic (from ₹169)" },
+        { id: "tier:standard", title: "Standard (from ₹219)" },
+        { id: "tier:premium", title: "Premium (from ₹499)" }
       ]);
       break;
     case "catalogFabric":
       await sendMenu(chatId, COPY.fabricAsk, [
         { id: "fabric:cotton", title: "100% Cotton" },
-        { id: "fabric:polyester", title: "Polyester (Dry Fit)" }
+        { id: "fabric:polyester", title: "Polyester DryFit" }
       ]);
       break;
     case "catalogQuality":
-      // We auto-skip this in processStep, so it shouldn't be reached
+      // Auto-skip quality since we use a simplified flow
+      draft.qualityOptionId = "standard";
+      await saveDraft(chatId, draft);
+      await promptNext(chatId, draft);
       break;
     case "catalogColor":
       await sendMenu(chatId, "Now choose your garment colour:", [
@@ -398,7 +401,7 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
       break;
     case "printMethod":
       await sendMenu(chatId, COPY.brandingTypeAsk, [
-        { id: "branding:print", title: "Printing (Screen / DTF)" },
+        { id: "branding:print", title: "Print (Screen/DTF)" },
         { id: "branding:embroidery", title: "Embroidery" }
       ]);
       break;
@@ -409,7 +412,7 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
         { id: "placement:upper_back", title: "Upper Back" },
         { id: "placement:left_sleeve", title: "Left Sleeve" },
         { id: "placement:right_sleeve", title: "Right Sleeve" },
-        { id: "logo:skip", title: "Skip — no artwork yet" }
+        { id: "logo:skip", title: "Skip - no artwork" }
       ], "View Placements");
       break;
     case "logoUpload":
@@ -418,13 +421,13 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
     case "logoMore":
       await sendMenu(chatId, COPY.addAnotherLogoAsk(draft.logos!.length), [
         { id: "logo:more", title: "Add another logo" },
-        { id: "logo:done", title: "No more — continue" }
+        { id: "logo:done", title: "No more, continue" }
       ]);
       break;
     case "mockupDecision":
       await sendMenu(chatId, COPY.mockupOfferAsk, [
         { id: "mockup:generate", title: "Generate my mockup" },
-        { id: "mockup:skip", title: "Skip — go to my quote" }
+        { id: "mockup:skip", title: "Skip - go to quote" }
       ]);
       break;
     case "payment":
