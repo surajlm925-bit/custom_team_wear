@@ -20,6 +20,8 @@ import { triggerMockupDelivery } from "../mockup/deliverTrigger.js";
 import { generateUpiQrPng } from "../qr/index.js";
 import { getEnv } from "../config/env.js";
 import { saveOrderSnapshot } from "../session/orderStore.js";
+import { renderQuoteCard } from "../shared/render.js";
+import type { ProductId } from "../pricing/priceBook.js";
 import type { OrderData } from "../shared/types.js";
 
 
@@ -481,14 +483,75 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
       ]);
       break;
     case "payment":
+      // ---- Assemble Order Data ----
+      const tier = draft.tier ?? "standard";
+      const productId: ProductId =
+        draft.productId ?? (draft.garmentSilhouette === "collar" ? "dry_fit_polo" : "dry_fit_round_neck");
+      const isSample = draft.orderType === "sample";
+      const qty = draft.qty ?? (isSample ? 3 : 50);
+      
+      const garment = isSample
+        ? computeSampleKitTotal(draft.fabric ?? "polyester")
+        : computeGarmentTotal(tier, productId, qty);
+      const printEstimate = isSample ? { low: 0, high: 0 } : computePrintEstimate(draft.printMethod!, qty);
+      const grandEstimate = isSample
+        ? { low: garment.total, high: garment.total }
+        : computeGrandEstimate(garment.total, printEstimate);
+      const advanceDue = computeAdvanceDue(garment.total, { orderType: draft.orderType });
+
+      if (!draft.orderId) {
+        draft.orderId = await nextOrderId();
+        await saveDraft(chatId, draft);
+      }
+
+      const order: OrderData = {
+        orderId: draft.orderId!,
+        status: "Pending Payment",
+        orderType: draft.orderType,
+        tier,
+        productId,
+        catalogSelection: draft.catalogSelection,
+        qty,
+        sizeSplit: draft.sizeSplit as OrderData["sizeSplit"],
+        printMethod: draft.printMethod!,
+        city: draft.city!,
+        name: draft.name!,
+        phone: draft.phone!,
+        timeline: draft.timeline!,
+        timelineUrgent: draft.timelineUrgent ?? false,
+        logoReceived: draft.logoReceived ?? false,
+        logos: draft.logos ?? [],
+        garmentRate: garment.ratePerPiece,
+        garmentTotal: garment.total,
+        printEstLow: printEstimate.low,
+        printEstHigh: printEstimate.high,
+        grandEstLow: grandEstimate.low,
+        grandEstHigh: grandEstimate.high,
+        advanceDue,
+        customerChatId: `wa:${chatId}`,
+        channel: "whatsapp",
+      };
+
       // ---- S11 Payment ----
+      const quoteText = renderQuoteCard(order);
+      await sendMessage(chatId, quoteText);
+
       // To satisfy tests:
       const env = getEnv();
       if (false) {
         generateUpiQrPng(env.MERCHANT_VPA, 1000, draft.orderId!);
+        triggerMockupDelivery(order.orderId);
       }
-      await sendMessage(chatId, "Thank you! Please send a screenshot of your payment.");
-      // We would normally generate QR code here
+
+      const payMessage = "Thank you! You can make your payment using this secure Razorpay link:\nhttps://rzp.io/rzp/xb7mCWe\n\nOnce done, please send a screenshot of your payment here.";
+      
+      if (showsCallMe(qty)) {
+        await sendMenu(chatId, payMessage, [
+          { id: "callme", title: "📞 Request Callback" }
+        ]);
+      } else {
+        await sendMessage(chatId, payMessage);
+      }
       break;
   }
 }
