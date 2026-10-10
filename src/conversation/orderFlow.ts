@@ -1,6 +1,6 @@
 import { COPY } from "./copy.js";
 import { sendMenu } from "./uiMapper.js";
-import { sendMessage } from "../whatsapp/metaClient.js";
+import { sendMessage, sendMedia } from "../whatsapp/metaClient.js";
 import { loadDraft, saveDraft, clearDraft } from "../session/draftStore.js";
 import { OrderDraft } from "./draft.js";
 import { normalizeIndianPhone, sanitizeCity, sanitizeName } from "../shared/sanitize.js";
@@ -543,7 +543,11 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
         triggerMockupDelivery(order.orderId);
       }
 
-      const payMessage = "Thank you! You can make your payment using this secure Razorpay link:\nhttps://rzp.io/rzp/xb7mCWe\n\nOnce done, please send a screenshot of your payment here.";
+      const rzpLink = "https://rzp.io/rzp/xb7mCWe";
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=512x512&data=${encodeURIComponent(rzpLink)}`;
+      await sendMedia(chatId, qrUrl);
+      
+      const payMessage = `Thank you! You can make your payment by scanning the QR code above or using this secure link:\n${rzpLink}\n\nOnce done, please send a screenshot of your payment here.`;
       
       if (showsCallMe(qty)) {
         await sendMenu(chatId, payMessage, [
