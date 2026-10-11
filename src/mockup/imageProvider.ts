@@ -4,6 +4,8 @@
  */
 
 import { generateGeminiMockup } from "./geminiClient.js";
+import { generateOpenRouterMockup } from "./openrouterClient.js";
+import { getEnv } from "../config/env.js";
 
 export interface MockupGenerationInput {
   /** Blank garment template (front or back view), PNG/JPEG bytes. */
@@ -23,6 +25,11 @@ export interface MockupGenerationResult {
 export async function generateMockupImage(
   input: MockupGenerationInput,
 ): Promise<MockupGenerationResult> {
-  // Enforce Gemini standalone
+  const env = getEnv();
+  const provider = (env.MOCKUP_IMAGE_PROVIDER || "openrouter").toLowerCase();
+
+  if (provider === "openrouter") {
+    return generateOpenRouterMockup(input);
+  }
   return generateGeminiMockup(input);
 }

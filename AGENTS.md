@@ -10,13 +10,12 @@ root, outside `app/`).
 
 ## What this is
 
-**Custom Teamwear — Bulk Order Bot.** A click-first Telegram bot for bulk apparel
-orders (MOQ 50 pcs), designed so the conversational core is portable to WhatsApp Cloud
-API later. Telegram users walk a fixed flow (tier → catalog → qty → sizes → print →
+**Custom Teamwear — Bulk Order Bot.** A click-first WhatsApp bot for bulk apparel
+orders (MOQ 50 pcs), built on the WhatsApp Cloud API. Users walk a fixed flow (tier → catalog → qty → sizes → print →
 contact → timeline → logo → mockup → quote → UPI payment); admins verify payment
 manually from an admin card; orders land in Google Sheets.
 
-**Stack:** TypeScript (ESM, `"type": "module"`), grammY 1.46 + `@grammyjs/conversations`,
+**Stack:** TypeScript (ESM, `"type": "module"`), WhatsApp Cloud API,
 Vercel serverless functions, Upstash Redis (sessions/dedupe/locks), Google Sheets
 (CRM), Sharp (deterministic mockup compositing), Vercel Blob (mockup storage),
 qrcode (UPI QR), mupdf (catalog PDF ingestion), Sentry. Node ≥ 20.
@@ -56,13 +55,13 @@ These are the rules of the codebase. Violating them is a bug.
 
 ```
 api/
-  webhook.ts            Telegram webhook entry (secret check, dedupe, fast 200-ACK, 25s grammY timeout)
+  webhook.ts            WhatsApp webhook entry (secret check, dedupe, fast 200-ACK, API timeouts)
   mockup-delivery.ts    Internal-only 202+waitUntil worker for slow mockup generation (x-internal-secret)
   heartbeat.ts          Daily cron -> admin ping
   health.ts             Public build/feature info (deploy-lag diagnosis; non-secret)
 src/
   admin/                Admin card notify + Confirm/Payment-Issue + mockup approve/reject handlers
-  bot/                  grammY composition root (getBot), context types, middleware order
+  bot/                  WhatsApp client configuration and webhook routing
   catalog/              Generated catalog domain module (tiers→groups→items→colour variants)
     data/               catalog.generated.json (GENERATED, never hand-edit) + overrides.json
   config/               env.ts (validation), sentry.ts, version.ts (BUILD_STAMP + feature flags)
@@ -87,11 +86,11 @@ tests/                  Node test-runner suites + support/ fakes (fakeRedis, fak
 
 ## Conversation flow (src/conversation/orderFlow.ts)
 
-One long grammY conversation, `orderFlow`, registered via `createConversation`.
+One long conversation flow, `orderFlow`, which guides the user.
 Progress lives in an `OrderDraft` persisted to Redis (`sess:<chatId>`) after every
 step; each step is skipped if its draft field is already set (resume support).
 `/start` exits any active conversation and re-enters, offering Resume/Fresh start
-if a draft with qty exists and is < 24h old. `cancel` callback works on every screen.
+if a draft with qty exists and is < 24h old. Back/Cancel options work on every screen.
 
 Steps: resume check → **S00** tier → **S1** catalog selection (group → item → image
 confirm → colour, mandatory; may end "assisted" for unscannable brands or go "back")
@@ -128,8 +127,7 @@ no-payment cancel → "Lead — No Payment".
 - **Paid flow (`paidGeneration.ts`):** proof screenshot routed via the top-level
   `bot.on("message")` → admins get approve/reject buttons (`mockupgen:` callbacks,
   idempotent, admin-gated).
-- **Serverless dispatch (`deliverTrigger.ts`):** mockup generation takes 30–60s+,
-  far beyond grammY's 25s webhook budget — it is dispatched fire-and-forget to
+  far beyond standard webhook timeout budgets — it is dispatched fire-and-forget to
   `POST /api/mockup-delivery` (120s maxDuration, `waitUntil`), protected by
   `x-internal-secret` with timing-safe compare. Both triggers call it: the
   order-flow mockup step and the admin paid-approval. **Never run slow
@@ -159,11 +157,11 @@ no-payment cancel → "Lead — No Payment".
 | `mockupquota:*` | ~40d | free-monthly quota (`mockupquota:freecommitted:<chat>:<month>`, sticky `mockupquota:decision:<genId>`, `mockupquota:committed:<genId>`) |
 | `ratelimit:ctw*`, `ratelimit:mockup*` | — | sliding-window limiters |
 
-Customer chat ids are stored as `"tg:<id>"` prefix strings (future `wa:`).
+Customer chat ids are stored as `"wa:<id>"` prefix strings.
 
 ## Serverless/Vercel gotchas
 
-- **Always 200-ACK the webhook**, even on error (avoid Telegram retry storms).
+- **Always 200-ACK the webhook**, even on error (avoid WhatsApp retry storms).
 - `api/webhook.ts` needs `includeFiles: "assets/catalog/**"` in `vercel.json` —
   catalog images are read from disk at runtime, not bundled by tracing.
 - `catalog.generated.json` is read with `fs.readFileSync` — tsconfig module settings
@@ -202,7 +200,7 @@ npm run set-webhook / delete-webhook / webhook-info
   existing files and the fakes in `tests/support/`.
 - Covered: pricing math, sanitizers/validators, status machine, catalog domain +
   S1 flow, mockup compositing (pixel-exact), quota, workflow, durability, timing.
-- Not covered: the live grammY conversation end-to-end (manual QA on Telegram per
+- Not covered: the live WhatsApp conversation end-to-end (manual QA on WhatsApp per
   README §6). A mock-transport e2e suite is a known good future addition.
 
 ## Common tasks

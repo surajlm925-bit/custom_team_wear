@@ -96,21 +96,24 @@ export function buildMockupPrompt(
   const styleClause = garment?.styleLabel ? ` (the "${garment.styleLabel}" style)` : "";
   const colorHex = garment?.colorName ? getColorHex(garment.colorName) : null;
   const colorNameDisplay = garment?.colorName ?? "";
-  const colorClause = garment?.colorName
-    ? `Its colour is expected to be ${colorNameDisplay} (hex ${colorHex ?? "000000"}); keep this exact colour and shade unchanged.`
-    : "";
-  const garmentIdentityLine = garment
-    ? `Reference image #1 shows the exact ${garmentTypeWord}${styleClause} the customer has chosen. Keep its garment type, brand, style, cut, fabric, and colour exactly as shown — do not substitute a different or generic garment.${colorClause}`
-    : "";
+  const isWhiteColor = !colorNameDisplay || colorNameDisplay.toLowerCase() === "white";
+
+  const colorInstruction = !isWhiteColor
+    ? `GARMENT COLOR: The base garment in Reference Image #1 is a white template. You MUST color the garment fabric into solid ${colorNameDisplay}${colorHex ? ` (hex #${colorHex})` : ""}. Retain all garment folds, creases, highlights, shadows, buttons, and the neutral background, but the shirt itself must be ${colorNameDisplay}.`
+    : `GARMENT COLOR: Keep the garment fabric crisp white as shown in Reference Image #1.`;
 
   // Print/embroidery texture language for the prompt
   const printMethodKey = printMethod ?? "none";
   const textureLanguage =
     printMethodKey === "embroidery"
-      ? "stitch in thread direction matching the original logo"
-      : printMethodKey === "dtf" || printMethodKey === "screen_print" || printMethodKey === "sublimation"
-        ? "flat ink application, no visible brush strokes"
-        : "";
+      ? "High-density 3D machine embroidery: raised glossy rayon/polyester thread stitches with distinct stitch direction, authentic physical relief, and realistic cast micro-shadows along the thread edges."
+      : printMethodKey === "screen_print"
+        ? "Authentic screen-printed plastisol/water-based ink: matte finish with the garment's fabric weave pattern subtly embossing through the ink, natural ink layer thickness, conforming perfectly to cloth ripples."
+        : printMethodKey === "dtf"
+          ? "Direct-to-film (DTF) heat-transfer print: sharp, vibrant ink layer seamlessly bonded to the cotton/polyester fibres, bending naturally with every fold and crease of the garment."
+          : printMethodKey === "sublimation"
+            ? "Dye-sublimation: ink fully infused into the garment fibers with zero edge thickness, flawlessly taking on all highlights, shadows, and cloth texture of the garment."
+            : "Professional garment print: physically printed onto the textile, adopting the fabric's natural weave, folds, lighting, and ambient shadows.";
 
   // Sleeve-side-angle prompt: if any assignment is a sleeve placement, add side-angle view
   const sleeveAssignments = assignments.filter(
@@ -127,39 +130,32 @@ export function buildMockupPrompt(
       const centerX = Math.round(box.left + box.width / 2);
       const centerY = Math.round(box.top + box.height / 2);
       return (
-        `- Logo reference image #${refNumber}: place it on ${desc}. ` +
-        `In the ${templateWidth}x${templateHeight}px output image, center the logo at pixel position ` +
-        `(${centerX}, ${centerY}) measured from the top-left corner, sized to fit within approximately ` +
-        `${box.width}px wide by ${box.height}px tall while preserving the logo's original aspect ratio. ` +
-        `Do not draw any visible border, outline, frame, or box around the logo or its placement area — ` +
-        `only the logo artwork itself should appear on the fabric, blended naturally into the garment with no ` +
-        `background box, no guide marks, and no rectangle of any kind.`
+        `- Logo reference image #${refNumber}: print it on ${desc}. ` +
+        `In the ${templateWidth}x${templateHeight}px output image, position the logo centered at pixel coordinate ` +
+        `(${centerX}, ${centerY}) measured from the top-left corner, scaled to fit within approximately ` +
+        `${box.width}px wide by ${box.height}px tall while strictly preserving its original aspect ratio. ` +
+        `Only the graphic elements of the logo should be printed onto the garment — never print a bounding box, background rectangle, card, outline, or guide marks.`
       );
     })
     .join("\n");
 
-  // Reference image #1 is now the white-base garment template the customer confirmed
-  // in the catalog flow (their selected brand/style + colour), rendered as a white
-  // silhouette with the exact colour preserved via the hex code in the prompt.
   const lines = [
-    garmentIdentityLine,
-    WHITE_TEMPLATE_DESC,
-    textureLanguage
-      ? `Apply the following texture: ${textureLanguage}.`
-      : "",
+    `GARMENT SPECIFICATION: Reference image #1 shows the exact ${garmentTypeWord}${styleClause} (${viewLabel}), exactly ${templateWidth}x${templateHeight} pixels.`,
+    colorInstruction,
+    `PRINTING SPECIFICATION: ${textureLanguage}`,
     sleeveSideAnglePrompt,
-    `Reference image #1 is the product photo of the exact garment (${viewLabel}), exactly ${templateWidth}x${templateHeight} pixels. Treat whatever it shows — the garment, its colour and fabric, the background, and any model or scene — as fixed.`,
-    "TASK: This is a minimal edit, not a new photo. Start from reference image #1 exactly as given, and make the smallest possible change: add the logo(s) described below onto the garment fabric at the specified position(s). Every other pixel — the garment's type, brand, style, shape, colour, and fabric texture, the background, the camera framing and crop, the lighting, and any model shown — must remain exactly as it is in reference image #1. Do not regenerate or reimagine the scene; treat this as pasting the logo onto the existing photo, not recreating the photo.",
+    "TASK: Photorealistic garment mockup. Color the garment fabric as specified, and seamlessly print the logo(s) onto the fabric at the exact specified position(s).",
+    "PHYSICAL PRINT REALISM REQUIREMENTS:",
+    "- Fabric Deformation: The printed logo must warp and deform naturally with the folds, creases, wrinkles, and curvature of the garment fabric beneath it.",
+    "- Lighting & Shadows: The printed logo must receive the exact same ambient lighting, directional highlights, and shadow gradients present across that region of the shirt. It must not look like a flat sticker pasted on top; it must look physically printed on the garment.",
+    "- Surface Finish: Apply the specified print texture so the ink/stitching feels tactile and authentic to real apparel manufacturing.",
     placementLines,
-    "ABSOLUTE RULES — reference image #1 must be reproduced unchanged except for the logo(s):",
-    "- Do not change the garment shown. Keep the exact same garment type, brand, style, cut, colour, and fabric as reference image #1 — never swap it for a different or generic garment.",
-    "- Do not add or remove a person/model. If reference image #1 shows a model wearing the garment, keep that model exactly as-is; if it shows the garment alone, keep it alone. Do not introduce a mannequin, ghost silhouette, or translucent body.",
-    "- Do not change the background, camera angle, crop, framing, garment shape, garment colour, or fabric texture. These must match reference image #1 exactly, pixel-for-pixel, everywhere except inside the logo placement area(s) described above.",
-    "- Do not invent, stylize, recolor, redraw, simplify, or omit any part of the logo — including its text or fine detail. Reproduce the logo's exact shape, text, and colours as given in its reference image.",
-    "- Preserve the logo's own outer silhouette exactly as drawn in its reference image (for example, a circular badge must stay circular on the garment — never square it off or add a rectangular patch behind it). The rectangular image file containing the logo is just a container; only the actual logo artwork inside it should appear on the garment.",
-    "- Do not add any visible frame, border, outline, card, or background box around the logo beyond its own natural edge.",
-    "- The result should look like the logo was simply added to reference image #1 with everything else identical — not like a new photo was created.",
-    `Output a single image, exactly ${templateWidth}x${templateHeight} pixels, identical in aspect ratio and framing to reference image #1.`,
+    "PRESERVATION RULES:",
+    "- Preserve the exact garment cut, style, collar, seams, buttons, framing, and neutral background from Reference Image #1.",
+    `- The shirt fabric must be colored ${isWhiteColor ? "white" : colorNameDisplay}.`,
+    "- Reproduce the logo's exact colors, typography, and iconography without altering or simplifying the artwork.",
+    "- Do not add any white square, background border, or canvas box behind the logo.",
+    `Output a single photorealistic photograph, exactly ${templateWidth}x${templateHeight} pixels.`,
   ];
   return lines
     .filter((line) => line.trim() !== "")

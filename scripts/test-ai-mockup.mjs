@@ -35,10 +35,11 @@ for (const line of envContent.split(/\r?\n/)) {
 const logoPath = process.argv[2];
 const placement = process.argv[3] || "left_chest";
 const product = process.argv[4] || "cotton_polo";
-const provider = (process.env.MOCKUP_IMAGE_PROVIDER || "gemini").toLowerCase();
+const color = process.argv[5] || "Navy Blue";
+const provider = (process.env.MOCKUP_IMAGE_PROVIDER || "openrouter").toLowerCase();
 
 if (!logoPath) {
-  console.error("Usage: node scripts/test-ai-mockup.mjs <path-to-logo-image> [placement] [product]");
+  console.error("Usage: node scripts/test-ai-mockup.mjs <path-to-logo-image> [placement] [product] [color]");
   process.exit(1);
 }
 if (provider === "gemini" && !process.env.GEMINI_API_KEY) {
@@ -54,7 +55,7 @@ const { generateAiMockups } = await import("../src/mockup/generateAi.ts");
 
 const logoBuffer = await readFile(path.resolve(logoPath));
 
-console.log(`Generating mockup: product=${product} placement=${placement} logo=${logoPath} provider=${provider}`);
+console.log(`Generating mockup: product=${product} color=${color} placement=${placement} logo=${logoPath} provider=${provider}`);
 console.log(provider === "gemini" ? "Calling Gemini (free tier)..." : "Calling OpenRouter... (this costs real credits)");
 
 const order = {
@@ -64,7 +65,7 @@ const order = {
   productId: product,
   qty: 60,
   sizeSplit: { S: 10, M: 20, L: 20, XL: 10, XXL: 0, "3XL": 0 },
-  printMethod: "dtf",
+  printMethod: "screen_print",
   city: "Mumbai",
   name: "Test User",
   phone: "9876543210",
@@ -72,6 +73,21 @@ const order = {
   timelineUrgent: false,
   logoReceived: true,
   logos: [{ fileId: "test", placement }],
+  catalogSelection: {
+    catalogVersion: "test",
+    tier: "basic",
+    groupId: "mens_polos",
+    groupLabel: "Men's Polos",
+    itemId: "cotton-polo",
+    itemLabel: "Cotton Polo",
+    productId: product,
+    garmentType: product.includes("polo") ? "polo" : "round_neck",
+    sourceId: "catalog",
+    sourcePage: 1,
+    colorName: color,
+    referenceImageKind: "placeholder",
+    mockupEligible: true,
+  },
   garmentRate: 359,
   garmentTotal: 21540,
   printEstLow: 2000,
@@ -80,7 +96,7 @@ const order = {
   grandEstHigh: 24540,
   advanceDue: 10770,
   customerChatId: "tg:123456",
-  channel: "telegram",
+  channel: "whatsapp",
 };
 
 const start = Date.now();
