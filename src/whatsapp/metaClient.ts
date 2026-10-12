@@ -13,7 +13,7 @@ async function metaFetch(path: string, body: Record<string, unknown>): Promise<a
   const url = `${env.META_API_BASE_URL}/v20.0/${env.META_PHONE_NUMBER_ID}${path}`;
   console.log(`[metaClient] calling fetch: ${url}`);
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 4000);
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
   
   try {
     const res = await fetch(url, {
@@ -82,6 +82,15 @@ export async function sendInteractiveButtons(
   buttons: Array<{ id: string; title: string }>,
 ) {
   console.log(`[metaClient] sendInteractiveButtons to=${to} type=button buttons=${buttons.length}`);
+  // WhatsApp Cloud API enforces: max 3 buttons, max 20 chars per title, max 256 chars per id
+  const validButtons = buttons.slice(0, 3).map(b => ({
+    type: 'reply' as const,
+    reply: {
+      id: b.id.slice(0, 256),
+      title: b.title.slice(0, 20)
+    }
+  }));
+
   return metaFetch('/messages', {
     messaging_product: 'whatsapp',
     to: phone(to),
@@ -90,10 +99,7 @@ export async function sendInteractiveButtons(
       type: 'button',
       body: { text },
       action: {
-        buttons: buttons.map(b => ({
-          type: 'reply',
-          reply: { id: b.id, title: b.title }
-        }))
+        buttons: validButtons
       }
     }
   });
@@ -107,21 +113,22 @@ export async function sendInteractiveList(
   sections: Array<{ title?: string; rows: Array<{ id: string; title: string; description?: string }> }>,
 ) {
   console.log(`[metaClient] sendInteractiveList to=${to} type=list rows=${sections.reduce((n, s) => n + s.rows.length, 0)}`);
+  // WhatsApp Cloud API enforces: max 20 chars button text, max 24 chars row title, max 72 chars description, max 200 chars id
   return metaFetch('/messages', {
     messaging_product: 'whatsapp',
     to: phone(to),
     type: 'interactive',
     interactive: {
       type: 'list',
-      body: { text },
+      body: { text: text.slice(0, 1024) },
       action: {
-        button: buttonText,
-        sections: sections.map(section => ({
-          ...(section.title ? { title: section.title } : {}),
-          rows: section.rows.map(row => ({
-            id: row.id,
-            title: row.title,
-            ...(row.description ? { description: row.description } : {})
+        button: buttonText.slice(0, 20),
+        sections: sections.slice(0, 10).map(section => ({
+          ...(section.title ? { title: section.title.slice(0, 24) } : {}),
+          rows: section.rows.slice(0, 10).map(row => ({
+            id: row.id.slice(0, 200),
+            title: row.title.slice(0, 24),
+            ...(row.description ? { description: row.description.slice(0, 72) } : {})
           }))
         }))
       }

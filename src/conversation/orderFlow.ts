@@ -118,8 +118,13 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
 
   switch (step) {
     case "orderType":
-      if (input === "order:bulk" || input === "order:sample") {
-        draft.orderType = input === "order:bulk" ? "bulk" : "sample";
+      const lowerOrderType = input.toLowerCase().trim();
+      if (input === "order:bulk" || lowerOrderType === "bulk" || lowerOrderType.includes("bulk") || lowerOrderType === "1") {
+        draft.orderType = "bulk";
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft);
+      } else if (input === "order:sample" || lowerOrderType === "sample" || lowerOrderType.includes("sample") || lowerOrderType === "2") {
+        draft.orderType = "sample";
         await saveDraft(chatId, draft);
         await promptNext(chatId, draft);
       } else {
@@ -128,8 +133,13 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
       break;
 
     case "garmentSilhouette":
-      if (input === "garment:round_neck" || input === "garment:collar") {
-        draft.garmentSilhouette = input === "garment:round_neck" ? "round_neck" : "collar";
+      const lowerSil = input.toLowerCase().trim();
+      if (input === "garment:round_neck" || lowerSil.includes("round") || lowerSil === "1") {
+        draft.garmentSilhouette = "round_neck";
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft);
+      } else if (input === "garment:collar" || lowerSil.includes("collar") || lowerSil.includes("polo") || lowerSil === "2") {
+        draft.garmentSilhouette = "collar";
         await saveDraft(chatId, draft);
         await promptNext(chatId, draft);
       } else {
@@ -138,14 +148,25 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
       break;
 
     case "sampleFabric":
-      if (input === "fabric:cotton" || input === "fabric:polyester") {
-        draft.fabric = input === "fabric:cotton" ? "cotton" : "polyester";
+      const lowerSampleFab = input.toLowerCase().trim();
+      if (input === "fabric:cotton" || lowerSampleFab.includes("cotton") || lowerSampleFab === "1") {
+        draft.fabric = "cotton";
         draft.qty = 3;
         draft.sizeSplit = resolveEvenSplit(3);
         draft.tier = "standard";
         draft.productId = draft.garmentSilhouette === "collar"
-          ? (draft.fabric === "cotton" ? "cotton_polo" : "dry_fit_polo")
-          : (draft.fabric === "cotton" ? "cotton_round_neck" : "dry_fit_round_neck");
+          ? "cotton_polo"
+          : "cotton_round_neck";
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft);
+      } else if (input === "fabric:polyester" || lowerSampleFab.includes("dry") || lowerSampleFab.includes("poly") || lowerSampleFab === "2") {
+        draft.fabric = "polyester";
+        draft.qty = 3;
+        draft.sizeSplit = resolveEvenSplit(3);
+        draft.tier = "standard";
+        draft.productId = draft.garmentSilhouette === "collar"
+          ? "dry_fit_polo"
+          : "dry_fit_round_neck";
         await saveDraft(chatId, draft);
         await promptNext(chatId, draft);
       } else {
@@ -203,9 +224,36 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
       break;
 
     case "timeline":
-      if (["timeline:urgent", "timeline:standard", "timeline:flexible"].includes(input)) {
-        draft.timeline = input.replace("timeline:", "") as any;
-        draft.timelineUrgent = draft.timeline === "urgent";
+      const lowerTimeline = input.toLowerCase().trim();
+      if (
+        input === "timeline:urgent" ||
+        lowerTimeline === "urgent" ||
+        lowerTimeline.includes("urgent") ||
+        lowerTimeline === "1"
+      ) {
+        draft.timeline = "urgent";
+        draft.timelineUrgent = true;
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft);
+      } else if (
+        input === "timeline:standard" ||
+        lowerTimeline === "standard" ||
+        lowerTimeline.includes("standard") ||
+        lowerTimeline.includes("3-4") ||
+        lowerTimeline === "2"
+      ) {
+        draft.timeline = "standard";
+        draft.timelineUrgent = false;
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft);
+      } else if (
+        input === "timeline:flexible" ||
+        lowerTimeline === "flexible" ||
+        lowerTimeline.includes("flexible") ||
+        lowerTimeline === "3"
+      ) {
+        draft.timeline = "flexible";
+        draft.timelineUrgent = false;
         await saveDraft(chatId, draft);
         await promptNext(chatId, draft);
       } else {
@@ -214,8 +262,17 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
       break;
 
     case "tier":
-      if (["tier:basic", "tier:standard", "tier:premium"].includes(input)) {
-        draft.tier = input.replace("tier:", "") as any;
+      const lowerTier = input.toLowerCase().trim();
+      if (input === "tier:basic" || lowerTier.includes("basic") || lowerTier === "1") {
+        draft.tier = "basic";
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft);
+      } else if (input === "tier:standard" || lowerTier.includes("standard") || lowerTier === "2") {
+        draft.tier = "standard";
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft);
+      } else if (input === "tier:premium" || lowerTier.includes("premium") || lowerTier === "3") {
+        draft.tier = "branded";
         await saveDraft(chatId, draft);
         await promptNext(chatId, draft);
       } else {
@@ -224,9 +281,15 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
       break;
 
     case "catalogFabric":
-      if (["fabric:cotton", "fabric:polyester"].includes(input)) {
-        draft.fabric = input.replace("fabric:", "") as any;
-        draft.productId = resolveProductId(draft.garmentSilhouette!, draft.fabric as any);
+      const lowerCatFab = input.toLowerCase().trim();
+      if (input === "fabric:cotton" || lowerCatFab.includes("cotton") || lowerCatFab === "1") {
+        draft.fabric = "cotton";
+        draft.productId = resolveProductId(draft.garmentSilhouette!, "cotton");
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft);
+      } else if (input === "fabric:polyester" || lowerCatFab.includes("poly") || lowerCatFab.includes("dry") || lowerCatFab === "2") {
+        draft.fabric = "polyester";
+        draft.productId = resolveProductId(draft.garmentSilhouette!, "polyester");
         await saveDraft(chatId, draft);
         await promptNext(chatId, draft);
       } else {
@@ -268,8 +331,13 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
       break;
 
     case "printMethod":
-      if (["branding:print", "branding:embroidery"].includes(input)) {
-        draft.printMethod = input === "branding:print" ? "screen_print" : "embroidery";
+      const lowerPrint = input.toLowerCase().trim();
+      if (input === "branding:print" || lowerPrint.includes("print") || lowerPrint.includes("screen") || lowerPrint.includes("dtf") || lowerPrint === "1") {
+        draft.printMethod = "screen_print";
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft);
+      } else if (input === "branding:embroidery" || lowerPrint.includes("embroidery") || lowerPrint === "2") {
+        draft.printMethod = "embroidery";
         await saveDraft(chatId, draft);
         await promptNext(chatId, draft);
       } else {
@@ -312,12 +380,13 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
       break;
       
     case "logoMore":
-      if (input === "logo:more") {
+      const lowerLogoMore = input.toLowerCase().trim();
+      if (input === "logo:more" || lowerLogoMore.includes("more") || lowerLogoMore.includes("add") || lowerLogoMore === "1") {
         // user wants more logos, remove the "logoReceived" flag so determineStep goes back to logoPlacement
         draft.logoReceived = undefined;
         await saveDraft(chatId, draft);
         await promptNext(chatId, draft);
-      } else if (input === "logo:done") {
+      } else if (input === "logo:done" || lowerLogoMore.includes("done") || lowerLogoMore.includes("continue") || lowerLogoMore.includes("no") || lowerLogoMore === "2") {
         // user is done
         await saveDraft(chatId, draft);
         await promptNext(chatId, draft);
@@ -327,18 +396,25 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
       break;
 
     case "mockupDecision":
-      if (["mockup:generate", "mockup:skip"].includes(input)) {
-        draft.mockupDecision = input.replace("mockup:", "") as any;
+      const lowerMockup = input.toLowerCase().trim();
+      if (input === "mockup:generate" || lowerMockup.includes("generate") || lowerMockup === "1" || lowerMockup === "yes") {
+        draft.mockupDecision = "generate";
         
         if (!draft.orderId) {
           draft.orderId = await nextOrderId();
         }
 
-        if (draft.mockupDecision === "generate") {
-          // Dummy order data just to trigger mockup. The real assembly happens later.
-          const order: any = { orderId: draft.orderId, logoReceived: draft.logoReceived, logos: draft.logos };
-          await saveOrderSnapshot(order).catch(() => {});
-          await triggerMockupDelivery(order.orderId);
+        const order: any = { orderId: draft.orderId, logoReceived: draft.logoReceived, logos: draft.logos };
+        await saveOrderSnapshot(order).catch(() => {});
+        await triggerMockupDelivery(order.orderId);
+        
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft);
+      } else if (input === "mockup:skip" || lowerMockup.includes("skip") || lowerMockup === "2" || lowerMockup === "no") {
+        draft.mockupDecision = "skip";
+        
+        if (!draft.orderId) {
+          draft.orderId = await nextOrderId();
         }
         
         await saveDraft(chatId, draft);
@@ -407,7 +483,7 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
     case "timeline":
       await sendMenu(chatId, COPY.timelineAsk, [
         { id: "timeline:urgent", title: "Urgent (Need soon)" },
-        { id: "timeline:standard", title: "Standard (3-4 weeks)" },
+        { id: "timeline:standard", title: "Standard (3-4 wks)" },
         { id: "timeline:flexible", title: "Flexible" }
       ]);
       break;

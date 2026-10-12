@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { FakeRedis } from "./support/fakeRedis.js";
 import { __setRedisForTests } from "../src/session/redisClient.js";
 import { createApprovalCode, verifyAndConsumeApprovalCode, getActiveApprovalCode } from "../src/admin/approvalCode.js";
-import { isAuthorizedAdmin, normalizeAdminChatId } from "../src/admin/actions.js";
+import { normalizeAdminChatId } from "../src/admin/actions.js";
 
 test("approvalCode: creates 6-digit code and consumes it", async () => {
   const redis = new FakeRedis();
