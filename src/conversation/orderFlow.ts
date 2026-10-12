@@ -21,6 +21,8 @@ import { generateUpiQrPng } from "../qr/index.js";
 import { getEnv } from "../config/env.js";
 import { saveOrderSnapshot } from "../session/orderStore.js";
 import { renderQuoteCard } from "../shared/render.js";
+import { safeAppendOrderRow } from "../sheets/safeAppend.js";
+import { notifyAdmins } from "../admin/notify.js";
 import type { ProductId } from "../pricing/priceBook.js";
 import type { OrderData } from "../shared/types.js";
 
@@ -560,8 +562,92 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
   }
 }
 
-async function completeOrder(chatId: string, _draft: OrderDraft) {
+function assembleOrderData(chatId: string, draft: OrderDraft): OrderData {
+  const tier = draft.tier ?? "standard";
+  const productId: ProductId =
+    draft.productId ?? (draft.garmentSilhouette === "collar" ? "dry_fit_polo" : "dry_fit_round_neck");
+  const isSample = draft.orderType === "sample";
+  const qty = draft.qty ?? (isSample ? 3 : 50);
+
+  const garment = isSample
+    ? computeSampleKitTotal(draft.fabric ?? "polyester")
+    : computeGarmentTotal(tier, productId, qty);
+  const printEstimate = isSample ? { low: 0, high: 0 } : computePrintEstimate(draft.printMethod!, qty);
+  const grandEstimate = isSample
+    ? { low: garment.total, high: garment.total }
+    : computeGrandEstimate(garment.total, printEstimate);
+  const advanceDue = computeAdvanceDue(garment.total, { orderType: draft.orderType });
+
+  return {
+    orderId: draft.orderId!,
+    status: "Pending Payment",
+    orderType: draft.orderType,
+    tier,
+    productId,
+    catalogSelection: draft.catalogSelection,
+    qty,
+    sizeSplit: draft.sizeSplit as OrderData["sizeSplit"],
+    printMethod: draft.printMethod!,
+    city: draft.city!,
+    name: draft.name!,
+    phone: draft.phone!,
+    timeline: draft.timeline!,
+    timelineUrgent: draft.timelineUrgent ?? false,
+    logoReceived: draft.logoReceived ?? false,
+    logos: draft.logos ?? [],
+    garmentRate: garment.ratePerPiece,
+    garmentTotal: garment.total,
+    printEstLow: printEstimate.low,
+    printEstHigh: printEstimate.high,
+    grandEstLow: grandEstimate.low,
+    grandEstHigh: grandEstimate.high,
+    advanceDue,
+    customerChatId: `wa:${chatId}`,
+    channel: "whatsapp",
+  };
+}
+
+async function completeOrder(chatId: string, draft: OrderDraft) {
+  // Acknowledge customer payment screenshot immediately
   await sendMessage(chatId, COPY.screenshotAck);
-  // Normal assembly logic here
+
+  if (!draft.orderId) {
+    draft.orderId = await nextOrderId();
+  }
+
+  const order = assembleOrderData(chatId, draft);
+
+  // 1. Snapshot the order in Redis
+  await saveOrderSnapshot(order).catch((err) => {
+    console.error(`[completeOrder] Failed to save order snapshot for ${order.orderId}:`, err);
+  });
+
+  // 2. Safely append to Google Sheets CRM (escalates full text to admin if sheet fails)
+  let sheetWriteFailed = false;
+  try {
+    await safeAppendOrderRow(order);
+  } catch (err) {
+    console.error(`[completeOrder] Sheet write failed for ${order.orderId}:`, err);
+    sheetWriteFailed = true;
+  }
+
+  // 3. Trigger admin card with 6-digit confirmation code and screenshot
+  const screenshotIdOrUrl = draft.paymentScreenshotId ?? "";
+  try {
+    await notifyAdmins(order, screenshotIdOrUrl);
+  } catch (err) {
+    console.error(`[completeOrder] notifyAdmins failed for ${order.orderId}:`, err);
+  }
+
+  // 4. Apologize gracefully if sheets write failed
+  if (sheetWriteFailed) {
+    await sendMessage(
+      chatId,
+      "Sorry, we hit a small hiccup recording your order in our database — our team has been notified and will verify your payment shortly. Your payment screenshot is received! 🙏",
+    ).catch(() => {});
+  }
+
+  // 5. Clear draft
   await clearDraft(chatId);
 }
+

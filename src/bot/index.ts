@@ -5,9 +5,14 @@ import { checkRateLimit } from "../session/rateLimit.js";
 import { acquireChatLock, releaseChatLock } from "../session/chatLock.js";
 import { COPY } from "../conversation/copy.js";
 import { sendMessage } from "../whatsapp/metaClient.js";
-import { handleAdminAction, handleMockupGenAction } from "../admin/actions.js";
-// import { getChatPendingGenerationId } from "../mockup/generationStore.js";
-// import { attachPaymentProof } from "../mockup/paidGeneration.js";
+import {
+  handleAdminAction,
+  handleMockupGenAction,
+  handleAdminTextCommand,
+  isAuthorizedAdmin,
+} from "../admin/actions.js";
+import { getChatPendingGenerationId } from "../mockup/generationStore.js";
+import { attachPaymentProof } from "../mockup/paidGeneration.js";
 
 let initialized = false;
 
@@ -35,9 +40,11 @@ export async function handleMessage(chatId: string, message: any) {
   }
 
   try {
-    let input = message.text?.body || message.interactive?.button_reply?.id || message.interactive?.list_reply?.id;
-    
-    // Intercept admin actions
+    const input = message.text?.body || message.interactive?.button_reply?.id || message.interactive?.list_reply?.id;
+    const isImage = !!message.image;
+    const imageId = message.image?.id;
+
+    // 1. Intercept admin button actions
     if (input?.startsWith("admin:")) {
       await handleAdminAction(chatId, input, message);
       return;
@@ -47,10 +54,26 @@ export async function handleMessage(chatId: string, message: any) {
       return;
     }
 
-    // Paid mockup proof interception would go here before entering flow
-    // ...
+    // 2. Intercept admin typed commands (6-digit approval code, "CONFIRM <order>", etc.)
+    if (input && isAuthorizedAdmin(chatId)) {
+      const handled = await handleAdminTextCommand(chatId, input);
+      if (handled) return;
+    }
 
-    // Enter manual state machine
+    // 3. Paid mockup proof interception: customer sends proof photo while pending paid mockup
+    if (isImage && imageId) {
+      const pendingGenId = await getChatPendingGenerationId(chatId);
+      if (pendingGenId) {
+        console.log(`[bot] Found pending paid generation ${pendingGenId} for ${chatId}, attaching payment proof`);
+        const result = await attachPaymentProof(pendingGenId, imageId);
+        if (result.ok) {
+          await sendMessage(chatId, COPY.mockupPaidProofAck).catch(() => {});
+          return;
+        }
+      }
+    }
+
+    // 4. Enter customer conversation state machine
     console.log(`[bot] calling handleWhatsAppMessage`);
     await handleWhatsAppMessage(chatId, message);
     console.log(`[bot] handleWhatsAppMessage completed`);

@@ -13,7 +13,7 @@
  * endpoint and to log.
  */
 
-export const BUILD_STAMP = "2026-10-11-seedream-45-photorealistic-mockups";
+export const BUILD_STAMP = "2026-10-12-admin-approval-flow-and-6digit-code";
 
 export interface BuildInfo {
   buildStamp: string;

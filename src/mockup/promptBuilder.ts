@@ -37,7 +37,7 @@ const PLACEMENT_DESCRIPTIONS: Record<LogoPlacement, string> = {
   right_sleeve: "the right sleeve, over the bicep area (the wearer's right arm, which appears on the LEFT side of a front-facing photo)",
 };
 
-const WHITE_TEMPLATE_DESC = "Reference image #1 is a white-base garment template; the garment colour will be set to the hex code specified in the prompt, and all other garment attributes are preserved from this white base.";
+export const WHITE_TEMPLATE_DESC = "Reference image #1 is a white-base garment template; the garment colour will be set to the hex code specified in the prompt, and all other garment attributes are preserved from this white base.";
 
 const SLEEVE_SIDE_ANGLE_PROMPT = "Also generate a side-angle view showing the sleeve on the garment's side, with the front of the shirt visible alongside the sleeve, so both the sleeve placement and the garment's front are clearly visible.";
 

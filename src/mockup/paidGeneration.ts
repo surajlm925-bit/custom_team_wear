@@ -70,27 +70,50 @@ export async function attachPaymentProof(
   return { ok: false, reason: `generation is already ${record.status}` };
 }
 
+import { createApprovalCode } from "../admin/approvalCode.js";
+import { getPublicMediaUrl } from "../whatsapp/media.js";
+import { sendMedia } from "../whatsapp/metaClient.js";
+
 async function forwardProofToAdmins(
   record: { generationId: string; orderId: string; amountInr: number },
-  _paymentProofMessageId: string,
+  paymentProofMessageId: string,
 ): Promise<void> {
   const env = getEnv();
+  const code = await createApprovalCode("mockup", record.generationId);
   const caption =
     `*Paid mockup approval needed*\n` +
     `Order: \`${record.orderId}\`\n` +
     `Amount: ₹${record.amountInr}\n\n` +
-    `Verify this payment against your UPI/bank statement, then Approve or Reject.`;
+    `Verify this payment against your UPI/bank statement, then Approve or Reject.\n\n` +
+    `🔐 *Approval Code:* \`${code}\`\n(Valid for 2 minutes. Tap Approve or reply with \`${code}\` to approve.)`;
+
+  let publicUrl: string | undefined = undefined;
+  if (paymentProofMessageId) {
+    publicUrl = await getPublicMediaUrl(paymentProofMessageId, `proofs/mockup-${record.generationId}`);
+  }
 
   for (const adminChatId of env.ADMIN_CHAT_IDS) {
+    if (publicUrl) {
+      try {
+        await sendMedia(adminChatId.toString(), publicUrl, `Payment proof for mockup ${record.orderId}`);
+      } catch (err) {
+        console.warn(`[forwardProofToAdmins] Could not forward proof image to admin:`, err);
+      }
+    }
+
+    let interactiveSent = false;
     try {
-      // NOTE: For WhatsApp, if the user sent an image, we would ideally forward that image.
-      // However, Zaptilo doesn't have a simple forward mechanism by message ID without downloading it first.
-      // For now, we'll send a text message with the interactive buttons, and in a real app,
-      // we'd download the image using the Zaptilo API and send it using sendMedia.
-      // This is a known limitation of this migration step.
       await sendInteractiveButtons(adminChatId.toString(), caption, decisionButtons(record.generationId));
+      interactiveSent = true;
     } catch (err) {
-      await sendMessage(adminChatId.toString(), `${caption}\n\n(⚠️ proof forward failed: ${String(err)})`).catch(() => {});
+      console.warn(`[forwardProofToAdmins] Interactive buttons failed for admin ${adminChatId}:`, err);
+    }
+
+    if (!interactiveSent) {
+      await sendMessage(
+        adminChatId.toString(),
+        `${caption}\n\n*Actions:*\n• Reply with \`${code}\` or *APPROVE ${record.generationId}* to approve.\n• Reply with *REJECT ${record.generationId}* to reject.`,
+      ).catch(() => {});
     }
   }
 }
