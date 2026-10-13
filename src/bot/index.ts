@@ -40,7 +40,14 @@ export async function handleMessage(chatId: string, message: any) {
   }
 
   try {
-    const input = message.text?.body || message.interactive?.button_reply?.id || message.interactive?.list_reply?.id;
+    const input =
+      message.text?.body ||
+      message.interactive?.button_reply?.id ||
+      message.interactive?.button_reply?.title ||
+      message.interactive?.list_reply?.id ||
+      message.interactive?.list_reply?.title ||
+      message.button?.payload ||
+      message.button?.text;
     const isImage = !!message.image;
     const imageId = message.image?.id;
 

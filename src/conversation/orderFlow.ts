@@ -37,7 +37,14 @@ export interface WhatsAppContext {
 export async function handleWhatsAppMessage(chatId: string, message: any) {
   console.log(`[orderFlow] MESSAGE OBJECT:`, JSON.stringify(message));
   console.log(`[orderFlow] message.text is:`, message.text);
-  let input = message.text?.body || message.interactive?.button_reply?.id || message.interactive?.list_reply?.id;
+  let input =
+    message.text?.body ||
+    message.interactive?.button_reply?.id ||
+    message.interactive?.button_reply?.title ||
+    message.interactive?.list_reply?.id ||
+    message.interactive?.list_reply?.title ||
+    message.button?.payload ||
+    message.button?.text;
   const isImage = !!message.image;
   if (isImage) {
     input = message.image.id;
@@ -52,10 +59,17 @@ export async function handleWhatsAppMessage(chatId: string, message: any) {
   const ctx: WhatsAppContext = { chatId, message, input: input.trim() };
   let draft = (await loadDraft(chatId)) || {};
 
-  // Support global cancel/reset
-  if (ctx.input.toLowerCase() === "cancel" || ctx.input === "back_to_start") {
+  // Support global cancel/reset/start
+  const lowerInput = ctx.input.toLowerCase();
+  if (lowerInput === "cancel" || lowerInput === "back_to_start") {
     await clearDraft(chatId);
     await sendMessage(chatId, COPY.discardGoodbye);
+    return;
+  }
+
+  if (lowerInput === "/start" || lowerInput === "start" || lowerInput === "restart" || lowerInput === "reset") {
+    await clearDraft(chatId);
+    await promptNext(chatId, {}, false);
     return;
   }
 
@@ -128,7 +142,8 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
         await saveDraft(chatId, draft);
         await promptNext(chatId, draft);
       } else {
-        await promptNext(chatId, draft, true); // initial prompt
+        const isGreeting = ["hi", "hello", "hey", "hola", "start", "/start"].includes(lowerOrderType);
+        await promptNext(chatId, draft, !isGreeting);
       }
       break;
 
@@ -175,15 +190,15 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
       break;
 
     case "qty":
-      if (!isNaN(Number(input)) && Number(input) > 0) {
-        const qty = Number(input);
-        if (!meetsMoq(qty)) {
+      const cleanedNum = Number(input.replace(/[^0-9]/g, ''));
+      if (!isNaN(cleanedNum) && cleanedNum > 0) {
+        if (!meetsMoq(cleanedNum)) {
           await sendMessage(chatId, COPY.rejection);
           await clearDraft(chatId);
           return;
         }
-        draft.qty = qty;
-        draft.sizeSplit = resolveEvenSplit(qty);
+        draft.qty = cleanedNum;
+        draft.sizeSplit = resolveEvenSplit(cleanedNum);
         await saveDraft(chatId, draft);
         await promptNext(chatId, draft);
       } else {

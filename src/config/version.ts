@@ -13,7 +13,7 @@
  * endpoint and to log.
  */
 
-export const BUILD_STAMP = "2026-10-13-whatsapp-interactive-and-fallback-fix";
+export const BUILD_STAMP = "2026-10-13-webhook-freeze-fix-and-input-resilience";
 
 export interface BuildInfo {
   buildStamp: string;
