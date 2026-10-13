@@ -13,7 +13,7 @@
  * endpoint and to log.
  */
 
-export const BUILD_STAMP = "2026-10-12-admin-approval-flow-and-6digit-code";
+export const BUILD_STAMP = "2026-10-13-whatsapp-interactive-and-fallback-fix";
 
 export interface BuildInfo {
   buildStamp: string;
