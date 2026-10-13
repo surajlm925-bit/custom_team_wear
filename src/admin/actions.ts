@@ -12,6 +12,7 @@ import { COPY } from "../conversation/copy.js";
 import { updateOrderRowStatus } from "../sheets/client.js";
 import { renderConfirmationDm } from "../shared/render.js";
 import { getRedis } from "../session/redisClient.js";
+import { loadOrderSnapshot } from "../session/orderStore.js";
 import { approvePaidGeneration, rejectPaidGeneration } from "../mockup/paidGeneration.js";
 import { sendMessage } from "../whatsapp/metaClient.js";
 import { verifyAndConsumeApprovalCode } from "./approvalCode.js";
@@ -63,31 +64,35 @@ export async function executeOrderConfirm(orderId: string, adminChatId: string):
   await updateOrderRowStatus(orderId, "Confirmed").catch(async (err) => {
     console.error("Failed to update sheet on confirm", err);
   });
-  await sendMessage(adminChatId, `Confirmed ✅ Order ${orderId} marked as confirmed.`);
+  await sendMessage(adminChatId, `Confirmed ✅ Code verified. Order ${orderId} marked as confirmed.`);
 
   // Notify all OTHER admins that this order is now settled.
   const env = getEnv();
   const normalizedSender = normalizeAdminChatId(adminChatId);
   for (const adminId of env.ADMIN_CHAT_IDS) {
     if (normalizeAdminChatId(adminId) !== normalizedSender) {
-      await sendMessage(adminId, `✅ Order ${orderId} was confirmed by admin.`).catch(() => {});
+      await sendMessage(adminId, `✅ Order ${orderId} was confirmed by admin with approval code.`).catch(() => {});
     }
   }
 
-  // Recover the customer chat id from the order snapshot in Redis
-  const redis = getRedis();
-  const snapshotStr = await redis.get<any>(`order:${orderId}`);
-  if (snapshotStr) {
+  // Recover customer chat id and send confirmation DM to user
+  const orderSnap = await loadOrderSnapshot(orderId);
+  if (orderSnap && orderSnap.customerChatId) {
     try {
-      const orderSnap = typeof snapshotStr === "string" ? JSON.parse(snapshotStr) : snapshotStr;
       const customerChatId = orderSnap.customerChatId;
       const dmText = renderConfirmationDm(orderId);
-      await sendMessage(customerChatId, dmText).catch((err) => console.error("Failed to DM customer on confirm", err));
+      console.log(`[executeOrderConfirm] Sending confirmation DM to customer ${customerChatId} for order ${orderId}`);
+      await sendMessage(customerChatId, dmText);
+      console.log(`[executeOrderConfirm] Customer confirmation DM delivered to ${customerChatId}`);
     } catch (err) {
-      console.error("Failed to parse order snapshot for confirmation DM", err);
+      console.error(`[executeOrderConfirm] Failed to send DM to customer on confirm`, err);
+      await sendMessage(
+        adminChatId,
+        `⚠️ Order confirmed, but failed to send confirmation DM to customer (${orderSnap.customerChatId}): ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   } else {
-    console.error(`Could not find order snapshot for order ${orderId}`);
+    console.error(`[executeOrderConfirm] Could not find order snapshot or customerChatId for order ${orderId}`);
   }
 }
 
@@ -146,7 +151,11 @@ export async function handleAdminAction(chatId: string, input: string, _message:
   const orderId = match[2];
 
   if (action === "confirm") {
-    await executeOrderConfirm(orderId, chatId);
+    // Single-click bypass is rejected. Must enter the 6-digit OTP code.
+    await sendMessage(
+      chatId,
+      `⚠️ One-click confirmation is disabled for security. Please reply with the active 6-digit approval code to confirm order ${orderId}.`,
+    );
   } else {
     await executeOrderIssue(orderId, chatId);
   }
@@ -175,21 +184,27 @@ export async function handleMockupGenAction(chatId: string, input: string, _mess
 
 /**
  * Handles typed messages from admins:
- * 1. 6-digit confirmation codes (e.g. "482910")
- * 2. Text command fallbacks (e.g. "CONFIRM CTW-261012-01", "APPROVE CTW-261012-01")
+ * 1. 6-digit confirmation codes (e.g. "482910", "482 910", or "CONFIRM 482910")
+ * 2. Rejection/Issue commands (e.g. "ISSUE CTW-261012-01")
  */
 export async function handleAdminTextCommand(chatId: string, text: string): Promise<boolean> {
   if (!isAuthorizedAdmin(chatId)) return false;
 
   const trimmed = text.trim();
 
-  // 1. Check for 6-digit numeric approval code
-  if (/^\d{6}$/.test(trimmed)) {
-    const pending = await verifyAndConsumeApprovalCode(trimmed);
+  // 1. Check for 6-digit numeric approval code (e.g. "482910", "482 910", or "CONFIRM 482910", "CODE 482910")
+  const directOtpMatch = /^\s*(\d{3}\s*\d{3})\s*$/.exec(trimmed);
+  const prefixOtpMatch = /^(?:code|confirm|approve|otp)\s*[:#-]?\s*(\d{6})$/i.exec(trimmed);
+  const code = directOtpMatch
+    ? directOtpMatch[1].replace(/\s+/g, "")
+    : (prefixOtpMatch ? prefixOtpMatch[1] : null);
+
+  if (code) {
+    const pending = await verifyAndConsumeApprovalCode(code);
     if (!pending) {
       await sendMessage(
         chatId,
-        "⚠️ That approval code is invalid or has expired (codes expire after 2 minutes). Please tap the button or generate a new code.",
+        "⚠️ That approval code is invalid or has expired (codes expire after 2 minutes). Please check or wait for a new code.",
       );
       return true;
     }
@@ -202,24 +217,14 @@ export async function handleAdminTextCommand(chatId: string, text: string): Prom
     return true;
   }
 
-  // 2. Check for text command fallback "CONFIRM <orderId>"
+  // 2. Reject direct "CONFIRM <orderId>" text without code
   const confirmMatch = /^(?:confirm|approve)\s+([a-zA-Z0-9_-]+)$/i.exec(trimmed);
   if (confirmMatch) {
     const id = confirmMatch[1];
-    // Check if it's an order or mockup
-    const redis = getRedis();
-    const orderSnap = await redis.get(`order:${id}`);
-    if (orderSnap) {
-      await executeOrderConfirm(id, chatId);
-      return true;
-    }
-    const gen = await redis.get(`mockupgen:${id}`);
-    if (gen) {
-      await executeMockupApprove(id, chatId);
-      return true;
-    }
-    // Fallback: try order confirm
-    await executeOrderConfirm(id, chatId);
+    await sendMessage(
+      chatId,
+      `⚠️ Direct text confirmation is disabled. To confirm order ${id}, please reply with its active 6-digit approval code.`,
+    );
     return true;
   }
 

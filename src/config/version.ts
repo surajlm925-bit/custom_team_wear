@@ -13,7 +13,7 @@
  * endpoint and to log.
  */
 
-export const BUILD_STAMP = "2026-10-13-webhook-freeze-fix-and-input-resilience";
+export const BUILD_STAMP = "2026-10-13-otp-only-admin-approval";
 
 export interface BuildInfo {
   buildStamp: string;

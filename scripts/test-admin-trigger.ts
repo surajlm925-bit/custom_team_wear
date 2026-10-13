@@ -130,11 +130,10 @@ async function main() {
   console.log(`   1. The admin (${env.ADMIN_CHAT_IDS.join(", ")}) should receive:`);
   console.log(`      - The payment proof image`);
   console.log(`      - The Admin Order Card with details & 6-digit approval code: ${code}`);
-  console.log(`      - Interactive buttons [✅ Confirm] [🚩 Issue] OR plain-text fallback.`);
-  console.log(`   2. To test approval, the admin can either:`);
-  console.log(`      - Tap [✅ Confirm], OR`);
-  console.log(`      - Reply with: ${code}, OR`);
-  console.log(`      - Reply with: CONFIRM ${testOrderId}`);
+  console.log(`   2. Single approval option:`);
+  console.log(`      - Reply with: ${code}`);
+  console.log(`      - The bot verifies the code against Redis, updates Sheet to Confirmed,`);
+  console.log(`        and automatically sends the confirmation DM to the customer (${testOrder.phone}).`);
   console.log("==========================================\n");
 }
 
