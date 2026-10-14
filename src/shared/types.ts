@@ -177,5 +177,9 @@ export interface OrderData {
   advanceDue: number;
   customerChatId: string; // channel-prefixed, e.g. "wa:919876543210"
   channel: "whatsapp";
+  paymentScreenshotUrl?: string;
+  catalogItemName?: string;
+  catalogColor?: string;
+  createdAt?: string;
   adminNotes?: string;
 }

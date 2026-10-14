@@ -312,38 +312,62 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
       }
       break;
 
-    case "catalogQuality":
-      if (input.startsWith("optquality:")) {
-        const qualityId = input.replace("optquality:", "");
-        const option = getQualityOptionById(draft.tier!, draft.productId!, qualityId);
-        if (option) {
-          draft.qualityOptionId = option.id;
-          draft.qualityOptionName = option.name;
-          await saveDraft(chatId, draft);
-          await promptNext(chatId, draft);
-        } else {
-          await promptNext(chatId, draft, true);
+    case "catalogQuality": {
+      const options = getQualityOptions(draft.tier!, draft.productId!);
+      const lower = input.toLowerCase().trim();
+      let matched = options.find(
+        (o) =>
+          input === `optquality:${o.id}` ||
+          lower === o.id.toLowerCase() ||
+          lower === o.name.toLowerCase() ||
+          lower.includes(o.name.toLowerCase()),
+      );
+      if (!matched && /^\d+$/.test(lower)) {
+        const idx = parseInt(lower, 10) - 1;
+        if (idx >= 0 && idx < options.length) {
+          matched = options[idx];
         }
+      }
+      if (matched) {
+        draft.qualityOptionId = matched.id;
+        draft.qualityOptionName = matched.name;
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft);
       } else {
         await promptNext(chatId, draft, true);
       }
       break;
+    }
 
-    case "catalogColor":
-      if (input.startsWith("color:")) {
-        const colorName = input.replace("color:", "");
-        const option = getQualityOptionById(draft.tier!, draft.productId!, draft.qualityOptionId!);
-        if (option && option.colors.includes(colorName)) {
-          draft.colorName = colorName;
-          await saveDraft(chatId, draft);
-          await promptNext(chatId, draft);
+    case "catalogColor": {
+      const option = getQualityOptionById(draft.tier!, draft.productId!, draft.qualityOptionId!);
+      const lower = input.toLowerCase().trim();
+      let matchedColor: string | undefined;
+      if (option) {
+        if (input.startsWith("color:")) {
+          const raw = input.replace("color:", "").trim();
+          matchedColor = option.colors.find((c) => c.toLowerCase() === raw.toLowerCase());
         } else {
-          await promptNext(chatId, draft, true);
+          matchedColor = option.colors.find(
+            (c) => c.toLowerCase() === lower || lower.includes(c.toLowerCase()),
+          );
+          if (!matchedColor && /^\d+$/.test(lower)) {
+            const idx = parseInt(lower, 10) - 1;
+            if (idx >= 0 && idx < option.colors.length) {
+              matchedColor = option.colors[idx];
+            }
+          }
         }
+      }
+      if (matchedColor) {
+        draft.colorName = matchedColor;
+        await saveDraft(chatId, draft);
+        await promptNext(chatId, draft);
       } else {
         await promptNext(chatId, draft, true);
       }
       break;
+    }
 
     case "printMethod":
       const lowerPrint = input.toLowerCase().trim();
@@ -360,25 +384,31 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
       }
       break;
 
-    case "logoPlacement":
-      if (input === "logo:skip") {
+    case "logoPlacement": {
+      const lower = input.toLowerCase().trim();
+      if (input === "logo:skip" || lower.includes("skip") || lower === "no" || lower === "none") {
         draft.logoReceived = false;
         draft.logos = [];
         await saveDraft(chatId, draft);
         await promptNext(chatId, draft);
-      } else if (input.startsWith("placement:")) {
-        const placement = input.replace("placement:", "");
-        // We temporarily store the selected placement, waiting for upload
-        // We will store it in catalogGroupId just as a temporary hack, or just save it in a transient state.
-        // Actually, draft.logos doesn't have the image yet. We can push an incomplete logo object.
-        draft.logos = draft.logos || [];
-        draft.logos.push({ placement: placement as any, fileId: "" });
-        await saveDraft(chatId, draft);
-        await promptNext(chatId, draft); // This will map to "logoUpload"
       } else {
-        await promptNext(chatId, draft, true);
+        let placement = input.startsWith("placement:") ? input.replace("placement:", "") : "";
+        if (!placement) {
+          if (lower.includes("chest") || lower.includes("front") || lower === "1") placement = "chest_left";
+          else if (lower.includes("back") || lower === "2") placement = "back_center";
+          else if (lower.includes("sleeve") || lower === "3") placement = "sleeve_left";
+        }
+        if (placement) {
+          draft.logos = draft.logos || [];
+          draft.logos.push({ placement: placement as any, fileId: "" });
+          await saveDraft(chatId, draft);
+          await promptNext(chatId, draft);
+        } else {
+          await promptNext(chatId, draft, true);
+        }
       }
       break;
+    }
 
     case "logoUpload":
       if (ctx.message.image) {
@@ -440,11 +470,11 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
       break;
 
     case "payment":
-      if (ctx.message.image) {
-        draft.paymentScreenshotId = input; // image id
+      if (ctx.message.image || ctx.message.document) {
+        draft.paymentScreenshotId = ctx.message.image?.id || ctx.message.document?.id || input;
         await saveDraft(chatId, draft);
         await completeOrder(chatId, draft);
-      } else if (input === "callme") {
+      } else if (input === "callme" || input.toLowerCase().includes("call")) {
         await sendMessage(chatId, COPY.callMeAck);
         await clearDraft(chatId);
       } else {
@@ -693,8 +723,11 @@ function assembleOrderData(chatId: string, draft: OrderDraft): OrderData {
     grandEstLow: grandEstimate.low,
     grandEstHigh: grandEstimate.high,
     advanceDue,
-    customerChatId: `wa:${chatId}`,
+    customerChatId: chatId.startsWith("wa:") ? chatId : `wa:${chatId}`,
     channel: "whatsapp",
+    catalogItemName: draft.catalogSelection?.itemLabel,
+    catalogColor: draft.catalogSelection?.colorName,
+    createdAt: new Date().toISOString(),
   };
 }
 

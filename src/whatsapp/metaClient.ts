@@ -43,11 +43,7 @@ async function metaFetch(path: string, body: Record<string, unknown>): Promise<a
 
 /** Strip the "wa:" prefix if present and return bare phone number */
 function phone(to: string): string {
-  let num = to.startsWith('wa:') ? to.substring(3) : to;
-  if (num.startsWith('+')) {
-    num = num.substring(1);
-  }
-  return num;
+  return to.replace(/^(wa:)+/gi, "").replace(/^\+/, "").trim();
 }
 
 /** Send a plain text message */

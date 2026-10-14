@@ -1,7 +1,8 @@
 import { getRedis } from "../session/redisClient.js";
 import crypto from "node:crypto";
 
-const APPROVAL_CODE_TTL_SECONDS = 120; // 2 minutes
+export const ORDER_APPROVAL_TTL_SECONDS = 30 * 60; // 30 minutes
+export const MOCKUP_APPROVAL_TTL_SECONDS = 120; // 2 minutes
 
 export interface PendingApproval {
   type: "order" | "mockup";
@@ -19,14 +20,19 @@ function entityKey(type: "order" | "mockup", id: string): string {
   return `admin:approval:entity:${type}:${id}`;
 }
 
+function cooldownKey(type: "order" | "mockup", id: string): string {
+  return `admin:approval:cooldown:${type}:${id}`;
+}
+
 /**
- * Generates a cryptographically random 6-digit approval code valid for 2 minutes.
+ * Generates a cryptographically random 6-digit approval code valid for 30 minutes (orders) or 2 mins (mockups).
  * Associates both code -> entity and entity -> code in Redis.
  */
 export async function createApprovalCode(
   type: "order" | "mockup",
   id: string,
   adminChatId?: string,
+  ttlSeconds = type === "order" ? ORDER_APPROVAL_TTL_SECONDS : MOCKUP_APPROVAL_TTL_SECONDS,
 ): Promise<string> {
   const redis = getRedis();
 
@@ -48,10 +54,33 @@ export async function createApprovalCode(
     createdAt: Date.now(),
   };
 
-  await redis.set(codeKey(code), pending, { ex: APPROVAL_CODE_TTL_SECONDS });
-  await redis.set(entityKey(type, id), code, { ex: APPROVAL_CODE_TTL_SECONDS });
+  await redis.set(codeKey(code), pending, { ex: ttlSeconds });
+  await redis.set(entityKey(type, id), code, { ex: ttlSeconds });
 
   return code;
+}
+
+/**
+ * Generates a secondary/fresh OTP code with rate-limit cooldown (30s) to prevent spam.
+ */
+export async function resendApprovalCode(
+  type: "order" | "mockup",
+  id: string,
+): Promise<{ ok: boolean; code?: string; cooldownRemaining?: number }> {
+  const redis = getRedis();
+  const cKey = cooldownKey(type, id);
+
+  const inCooldown = await redis.get<string>(cKey);
+  if (inCooldown) {
+    const ttl = typeof (redis as any).ttl === "function" ? await (redis as any).ttl(cKey) : 30;
+    return { ok: false, cooldownRemaining: Math.max(1, ttl) };
+  }
+
+  // Set 30 second cooldown
+  await redis.set(cKey, "1", { ex: 30 });
+
+  const code = await createApprovalCode(type, id);
+  return { ok: true, code };
 }
 
 /**

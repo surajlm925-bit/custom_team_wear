@@ -48,6 +48,11 @@ export class FakeRedis implements RedisLike {
     return 1;
   }
 
+  async ttl(key: string): Promise<number> {
+    const val = this.ttl.get(key);
+    return val !== undefined ? val : -2;
+  }
+
   async del(...keys: string[]): Promise<number> {
     let removed = 0;
     for (const k of keys) {

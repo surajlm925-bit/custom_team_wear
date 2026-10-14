@@ -35,14 +35,14 @@ export function isAuthorizedAdmin(chatId: string | undefined): boolean {
   return configured.includes(normalizedIncoming);
 }
 
-async function markProcessedIfFirst(orderId: string, action: "confirm" | "issue"): Promise<boolean> {
+export async function markProcessedIfFirst(orderId: string, action: "confirm" | "issue"): Promise<boolean> {
   const redis = getRedis();
   const key = `admin-action:${orderId}`;
   const result = await redis.set(key, action, { nx: true, ex: PROCESSED_TTL_SECONDS });
   return result === "OK";
 }
 
-async function getProcessedAction(orderId: string): Promise<string | null> {
+export async function getProcessedAction(orderId: string): Promise<string | null> {
   const redis = getRedis();
   return redis.get<string>(`admin-action:${orderId}`);
 }

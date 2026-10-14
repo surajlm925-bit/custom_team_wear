@@ -85,6 +85,14 @@ export interface Env {
    * linked; set BLOB_READ_WRITE_TOKEN locally for `vercel dev`.
    */
   BLOB_READ_WRITE_TOKEN?: string;
+  /** Admin email addresses for new order alerts & approval OTPs. */
+  ADMIN_EMAILS: string[];
+  /** Resend API key (re_...) for email dispatch. */
+  RESEND_API_KEY?: string;
+  /** Sender address for order emails (default: Custom Teamwear <onboarding@resend.dev>). */
+  ADMIN_EMAIL_FROM: string;
+  /** Secret used to HMAC-sign admin portal access URLs. */
+  ADMIN_PORTAL_SECRET: string;
   /** Price (in whole rupees) charged per paid mockup generation once the monthly free quota is exhausted. */
   MOCKUP_PAID_PRICE_INR: number;
   /** Number of free mockup generations allowed per chat per Asia/Kolkata calendar month. */
@@ -140,6 +148,15 @@ export function getEnv(): Env {
 
   const metaAppSecret = optional("META_APP_SECRET");
 
+  const adminEmailsRaw = process.env["ADMIN_EMAILS"] ?? "cteamwear@gmail.com";
+  const adminEmails = adminEmailsRaw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const adminEmailFrom = (process.env["ADMIN_EMAIL_FROM"] ?? "Custom Teamwear <onboarding@resend.dev>").trim();
+  const adminPortalSecret = (process.env["ADMIN_PORTAL_SECRET"] ?? process.env["META_WEBHOOK_SECRET"] ?? "ctw-portal-secret-key").trim();
+
   cached = {
     CHANNEL: "whatsapp",
     META_API_TOKEN: required("META_API_TOKEN"),
@@ -149,6 +166,10 @@ export function getEnv(): Env {
     META_API_BASE_URL: apiBaseUrl,
     META_APP_SECRET: metaAppSecret,
     ADMIN_CHAT_IDS: adminChatIds,
+    ADMIN_EMAILS: adminEmails.length > 0 ? adminEmails : ["cteamwear@gmail.com"],
+    RESEND_API_KEY: optional("RESEND_API_KEY"),
+    ADMIN_EMAIL_FROM: adminEmailFrom,
+    ADMIN_PORTAL_SECRET: adminPortalSecret,
     MERCHANT_VPA: required("MERCHANT_VPA"),
     STATIC_QR_URL: required("STATIC_QR_URL"),
     REDIS_REST_URL: required("REDIS_REST_URL"),
