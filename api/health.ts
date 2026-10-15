@@ -51,35 +51,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  if (req.query.test_ai === "1") {
-    try {
-      const { generateOpenRouterMockup } = await import("../src/mockup/openrouterClient.js");
-      const { resolveGarmentReference } = await import("../src/mockup/garmentReference.js");
-      const dummyOrder = {
-        orderId: "CTW-HEALTH-TEST",
-        productId: "dry_fit_polo",
-        catalogSelection: {
-          garmentType: "polo",
-          colorName: "Rama Blue",
-          itemLabel: "Finch Piper Mars",
-        },
-      };
-      const garmentRef = await resolveGarmentReference(dummyOrder as any, "front");
-      const dummyLogo = Buffer.from(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-        "base64",
-      );
-      const aiRes = await generateOpenRouterMockup({
-        templateImage: garmentRef.buffer,
-        logoImages: [dummyLogo],
-        prompt: "Test mockup prompt",
-      });
-      return res.status(200).json({ ok: true, generatedBytes: aiRes.imageBuffer.length, cost: aiRes.costUsd });
-    } catch (err: any) {
-      return res.status(200).json({ ok: false, error: String(err?.message ?? err), stack: err?.stack });
-    }
-  }
-
   return res.status(200).json({
     ok: true,
     service: "custom-teamwear-bot",
