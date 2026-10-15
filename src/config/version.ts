@@ -13,7 +13,7 @@
  * endpoint and to log.
  */
 
-export const BUILD_STAMP = "2026-10-15-mockup-delivery-pipeline-fix";
+export const BUILD_STAMP = "2026-10-15-media-download-graph-direct-fix";
 
 export interface BuildInfo {
   buildStamp: string;

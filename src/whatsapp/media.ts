@@ -1,21 +1,17 @@
 import { getEnv } from "../config/env.js";
 import { uploadMockupImage, isBlobStorageConfigured } from "../storage/blob.js";
 
-const MEDIA_FETCH_TIMEOUT_MS = 5000;
+const MEDIA_FETCH_TIMEOUT_MS = 15000;
 
 /** Download binary file from WhatsApp Cloud API (or Tech Provider) using Media ID with timeout */
 export async function fetchMetaMediaBuffer(fileId: string): Promise<Buffer> {
   const env = getEnv();
-  const baseUrl = env.META_API_BASE_URL || "https://graph.facebook.com";
-  const url = `${baseUrl}/v20.0/${fileId}`;
+  // Lookaside media URLs must be queried directly from Meta Graph API so that the returned URL's HMAC hash matches our token
+  const url = `https://graph.facebook.com/v20.0/${fileId}`;
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${env.META_API_TOKEN}`,
   };
-  if (env.EMOVUR_CONNECTOR_ID) {
-    headers["connector-id"] = env.EMOVUR_CONNECTOR_ID;
-    headers["collector-id"] = env.EMOVUR_CONNECTOR_ID;
-  }
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), MEDIA_FETCH_TIMEOUT_MS);
