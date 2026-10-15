@@ -66,7 +66,7 @@ export async function generateAiMockups(
       if (!width || !height) {
         throw new Error(`Could not read dimensions of the garment reference image for order ${order.orderId}.`);
       }
-      const prompt = buildMockupPrompt(view, assignments, width, height, 2, garmentRef.descriptor);
+      const prompt = buildMockupPrompt(view, assignments, width, height, 2, garmentRef.descriptor, order.printMethod);
       const { imageBuffer, costUsd } = await provider({
         templateImage: garmentRef.buffer,
         logoImages: logoBuffers,

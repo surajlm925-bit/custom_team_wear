@@ -99,7 +99,7 @@ export function buildMockupPrompt(
   const isWhiteColor = !colorNameDisplay || colorNameDisplay.toLowerCase() === "white";
 
   const colorInstruction = !isWhiteColor
-    ? `GARMENT COLOR: The base garment in Reference Image #1 is a white template. You MUST color the garment fabric into solid ${colorNameDisplay}${colorHex ? ` (hex #${colorHex})` : ""}. Retain all garment folds, creases, highlights, shadows, buttons, and the neutral background, but the shirt itself must be ${colorNameDisplay}.`
+    ? `GARMENT COLOR: The base garment in Reference Image #1 is a white template. You MUST recolor the entire garment fabric to solid ${colorNameDisplay}${colorHex ? ` (hex #${colorHex})` : ""}. Retain all garment folds, creases, highlights, shadows, buttons, collar, seams, and the neutral studio background, but the shirt fabric itself must be fully dyed in solid ${colorNameDisplay}${colorHex ? ` (hex #${colorHex})` : ""}, NOT white.`
     : `GARMENT COLOR: Keep the garment fabric crisp white as shown in Reference Image #1.`;
 
   // Print/embroidery texture language for the prompt
@@ -152,9 +152,9 @@ export function buildMockupPrompt(
     placementLines,
     "PRESERVATION RULES:",
     "- Preserve the exact garment cut, style, collar, seams, buttons, framing, and neutral background from Reference Image #1.",
-    `- The shirt fabric must be colored ${isWhiteColor ? "white" : colorNameDisplay}.`,
+    `- The shirt fabric must be colored solid ${isWhiteColor ? "white" : `${colorNameDisplay}${colorHex ? ` (hex #${colorHex})` : ""}`}, NOT white.`,
     "- Reproduce the logo's exact colors, typography, and iconography without altering or simplifying the artwork.",
-    "- Do not add any white square, background border, or canvas box behind the logo.",
+    "- Do not add any white square, background border, or canvas box behind the logo. If the logo reference has a rectangular background canvas, isolate and print only the logo insignia onto the garment.",
     `Output a single photorealistic photograph, exactly ${templateWidth}x${templateHeight} pixels.`,
   ];
   return lines

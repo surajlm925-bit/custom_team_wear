@@ -11,6 +11,7 @@
 
 import type { MockupView, OrderData } from "../shared/types.js";
 import { generateDeterministicMockups } from "./composite.js";
+import { generateAiMockups } from "./generateAi.js";
 import { isLegacyOrderWithoutCatalog, isMockupEligible } from "./garmentReference.js";
 import { validateLogoFile, validateLogoCount, MAX_LOGO_FILE_SIZE_BYTES } from "./rateLimit.js";
 import { viewsForAssignments, type LogoAssignment } from "./promptBuilder.js";
@@ -49,15 +50,14 @@ export interface MockupDeliveryOutcome {
  */
 export interface MockupDeliveryDeps {
   /**
-   * Overridable deterministic compositor (defaults to the real Sharp
-   * pixel-exact compositor). Tests inject a capture fake. The customer
-   * proof is ALWAYS deterministic — there is no AI provider on this path.
+   * Overridable compositor (defaults to AI generation when API keys are configured,
+   * falling back to deterministic Sharp compositing). Tests inject a capture fake.
    */
   compositor?: (
     order: OrderData,
     assignments: LogoAssignment[],
     logoBuffers: Buffer[],
-  ) => Promise<{ view: MockupView; buffer: Buffer }[]>;
+  ) => Promise<{ view: MockupView; buffer: Buffer; costUsd?: number }[]>;
   blobUploader?: BlobUploader;
   /** Overridable send hook (defaults to WhatsApp sendMedia). Returns the delivered file_id when known. */
   sendPhoto?: (chatId: string, url: string, filename: string, caption: string) => Promise<string | undefined>;
@@ -77,6 +77,39 @@ async function defaultSendPhoto(
 }
 
 /**
+ * Default compositor for production:
+ * If OPENROUTER_API_KEY or GEMINI_API_KEY is configured, produce photorealistic
+ * AI mockups via generateAiMockups. If AI generation fails or no key is set,
+ * seamlessly fall back to deterministic Sharp compositing.
+ */
+async function defaultCompositor(
+  order: OrderData,
+  assignments: LogoAssignment[],
+  logoBuffers: Buffer[],
+): Promise<{ view: MockupView; buffer: Buffer; costUsd?: number }[]> {
+  const hasAiProvider = Boolean(process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY);
+
+  if (hasAiProvider) {
+    try {
+      console.log(`[mockup/deliver] Generating photorealistic AI mockup for order ${order.orderId}...`);
+      const aiResults = await generateAiMockups(order, assignments, logoBuffers);
+      return aiResults.map((r) => ({
+        view: r.view as MockupView,
+        buffer: r.buffer,
+        costUsd: r.costUsd,
+      }));
+    } catch (aiErr) {
+      console.error(
+        `[mockup/deliver] AI mockup generation failed for order ${order.orderId}, falling back to deterministic:`,
+        aiErr,
+      );
+    }
+  }
+
+  return generateDeterministicMockups(order, assignments, logoBuffers);
+}
+
+/**
  * Generates and sends the mockup(s) to the customer for a confirmed
  * order. Every logo the customer uploaded is fetched and passed as its
  * own reference image, each assigned to the placement they picked for it
@@ -91,7 +124,7 @@ export async function deliverMockupForOrder(
   order: OrderData,
   deps: MockupDeliveryDeps = {},
 ): Promise<MockupDeliveryOutcome> {
-  const compositor = deps.compositor ?? generateDeterministicMockups;
+  const compositor = deps.compositor ?? defaultCompositor;
   const blobUploader = deps.blobUploader;
   const sendPhoto = deps.sendPhoto ?? defaultSendPhoto;
   const fetchLogo = deps.fetchLogo ?? fetchMetaMediaBuffer;
@@ -179,7 +212,7 @@ export async function deliverMockupForOrder(
     // receive a mockup that can't later be retrieved from storage. The
     // catch below marks the generation failed, persists the failure, and
     // notifies admins with order id + generation id.
-    const stored: { view: MockupView; buffer: Buffer; url: string; pathname: string }[] = [];
+    const stored: { view: MockupView; buffer: Buffer; url: string; pathname: string; costUsd?: number }[] = [];
     for (const result of results) {
       const pathname = `mockups/${order.orderId}/${result.view}.png`;
       const uploaded = blobUploader
@@ -190,6 +223,7 @@ export async function deliverMockupForOrder(
         buffer: result.buffer,
         url: uploaded.url,
         pathname: uploaded.pathname,
+        costUsd: result.costUsd,
       });
     }
 
@@ -211,7 +245,7 @@ export async function deliverMockupForOrder(
           url: s.url,
           pathname: s.pathname,
           whatsappMessageId: zaptiloMessageId, // Storing in DB field, we can leave the name or rename it if needed. Actually it uses zaptiloMessageId in DB, let's keep it as zaptiloMessageId unless I update types.ts
-          costUsd: 0, // deterministic proof — no per-image AI cost
+          costUsd: s.costUsd ?? 0,
         }).catch((err) => console.error(`Could not record output for generation ${generationId}:`, err));
       }
     }

@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url";
 import type { OrderData } from "../shared/types.js";
 import type { Silhouette } from "../pricing/priceBook.js";
 import { PRODUCT_SILHOUETTE } from "../pricing/priceBook.js";
-import { getColorHex, normalizeColorName } from "../catalog/colorHex.js";
+import { normalizeColorName } from "../catalog/colorHex.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = path.resolve(__dirname, "../../assets/mockup-templates");
@@ -93,7 +93,6 @@ export async function resolveGarmentReference(order: OrderData, view: "front" | 
   // Modern order with catalog selection: use white template + hex colour
   const silhouette = order.catalogSelection?.garmentType || PRODUCT_SILHOUETTE[order.productId] || "polo";
   const resolvedColorName = normalizeColorName(order.catalogSelection?.colorName ?? "");
-  const colorHex = resolvedColorName ? getColorHex(resolvedColorName) : null;
   const isPolo = silhouette === "polo";
   const templatePath = isPolo
     ? (view === "back" ? POLO_WHITE_BACK_PATH : POLO_WHITE_PATH)
@@ -102,10 +101,8 @@ export async function resolveGarmentReference(order: OrderData, view: "front" | 
   const descriptor: GarmentDescriptor = {
     garmentType: silhouette,
     styleLabel: order.catalogSelection?.itemLabel,
+    colorName: resolvedColorName || order.catalogSelection?.colorName,
   };
-  if (colorHex) {
-    descriptor.colorName = resolvedColorName;
-  }
   return {
     buffer,
     descriptor,
