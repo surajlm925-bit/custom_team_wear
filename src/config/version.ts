@@ -13,7 +13,7 @@
  * endpoint and to log.
  */
 
-export const BUILD_STAMP = "2026-10-15-payment-qr-and-mockup-delivery-fix";
+export const BUILD_STAMP = "2026-10-15-vercel-env-token-sync";
 
 export interface BuildInfo {
   buildStamp: string;
