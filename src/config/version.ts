@@ -13,7 +13,7 @@
  * endpoint and to log.
  */
 
-export const BUILD_STAMP = "2026-10-15-ai-mockup-color-recolor-photoreal";
+export const BUILD_STAMP = "2026-10-15-check-openrouter-env";
 
 export interface BuildInfo {
   buildStamp: string;
