@@ -6,18 +6,19 @@ const MEDIA_FETCH_TIMEOUT_MS = 15000;
 /** Download binary file from WhatsApp Cloud API (or Tech Provider) using Media ID with timeout */
 export async function fetchMetaMediaBuffer(fileId: string): Promise<Buffer> {
   const env = getEnv();
-  // Lookaside media URLs must be queried directly from Meta Graph API so that the returned URL's HMAC hash matches our token
-  const url = `https://graph.facebook.com/v20.0/${fileId}`;
-
   const headers: Record<string, string> = {
     Authorization: `Bearer ${env.META_API_TOKEN}`,
+    ...(env.EMOVUR_CONNECTOR_ID ? { "collector-id": env.EMOVUR_CONNECTOR_ID, "connector-id": env.EMOVUR_CONNECTOR_ID } : {}),
   };
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), MEDIA_FETCH_TIMEOUT_MS);
 
   try {
-    const metaRes = await fetch(url, { headers, signal: controller.signal });
+    let metaRes = await fetch(`https://graph.facebook.com/v20.0/${fileId}`, { headers, signal: controller.signal });
+    if (!metaRes.ok && env.META_API_BASE_URL && !env.META_API_BASE_URL.includes("facebook.com")) {
+      metaRes = await fetch(`${env.META_API_BASE_URL}/v20.0/${fileId}`, { headers, signal: controller.signal });
+    }
     if (!metaRes.ok) {
       const errText = await metaRes.text().catch(() => "");
       throw new Error(`Failed to query media metadata (${metaRes.status}): ${errText}`);

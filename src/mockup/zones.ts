@@ -21,16 +21,18 @@ export interface ZoneRect {
 export type TemplateView = "front" | "back";
 
 /** Which template view a given placement renders onto. */
-export const PLACEMENT_VIEWS: Record<LogoPlacement, TemplateView> = {
+export const PLACEMENT_VIEWS: Record<LogoPlacement | "centre_front", TemplateView> = {
   left_chest: "front",
   center_front: "front",
+  centre_front: "front",
   upper_back: "back",
   left_sleeve: "front",
   right_sleeve: "front",
 };
 
-export function getZoneForPlacement(placement: LogoPlacement): ZoneRect {
-  return ZONES[placement];
+export function getZoneForPlacement(placement: LogoPlacement | "centre_front"): ZoneRect {
+  if (placement === "centre_front") return ZONES.center_front;
+  return ZONES[placement] ?? ZONES.center_front;
 }
 
 const ZONES: Record<LogoPlacement, ZoneRect> = {

@@ -21,35 +21,45 @@
  */
 
 import { getEnv } from "../config/env.js";
+import { loadOrderSnapshot } from "../session/orderStore.js";
+import { deliverMockupForOrder } from "./deliver.js";
 
 const TRIGGER_TIMEOUT_MS = 5_000; // just long enough to hand off the request; never blocks on generation itself
 
-function resolveBaseUrl(): string | undefined {
+function resolveBaseUrl(): string {
   const env = getEnv();
   if (env.PUBLIC_BASE_URL) return env.PUBLIC_BASE_URL.replace(/\/$/, "");
-  // Vercel system env vars are populated automatically at runtime (no opt-in
-  // needed for server-side process.env access, unlike the NEXT_PUBLIC_ ones).
   const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL;
   if (productionUrl) return `https://${productionUrl}`;
   const deploymentUrl = process.env.VERCEL_URL;
   if (deploymentUrl) return `https://${deploymentUrl}`;
-  return undefined;
+  return "https://custom-teamwear-bot.vercel.app";
 }
 
 /**
- * Dispatches mockup generation for the given order without waiting for it
- * to complete. Never throws — any dispatch failure is logged, because a
- * missing mockup should never take down or delay order confirmation.
+ * Dispatches mockup generation for the given order.
+ * Attempts fast deterministic delivery in-process first so the user sees their
+ * preview immediately before payment, and falls back to /api/mockup-delivery.
  */
 export async function triggerMockupDelivery(orderId: string): Promise<void> {
-  const baseUrl = resolveBaseUrl();
-  if (!baseUrl) {
-    console.error(
-      `Cannot trigger mockup delivery for ${orderId}: no base URL resolved (set PUBLIC_BASE_URL or rely on Vercel's system env vars).`,
-    );
-    return;
+  // 1. In-process direct delivery (Sharp compositing takes ~150ms)
+  try {
+    const snapshot = await loadOrderSnapshot(orderId).catch(() => undefined);
+    if (snapshot && snapshot.logoReceived && snapshot.logos && snapshot.logos.length > 0) {
+      console.log(`[deliverTrigger] Executing fast delivery for ${orderId}`);
+      const outcome = await deliverMockupForOrder(snapshot);
+      if (outcome.delivered) {
+        console.log(`[deliverTrigger] Fast delivery succeeded for ${orderId}`);
+        return;
+      }
+      console.warn(`[deliverTrigger] Fast delivery returned not delivered for ${orderId}: ${outcome.reason}`);
+    }
+  } catch (err) {
+    console.warn(`[deliverTrigger] Fast in-process delivery error for ${orderId}, falling back to API:`, err);
   }
 
+  // 2. Fallback to standalone background function
+  const baseUrl = resolveBaseUrl();
   const env = getEnv();
   const secret = env.INTERNAL_MOCKUP_SECRET || env.META_WEBHOOK_SECRET;
   try {

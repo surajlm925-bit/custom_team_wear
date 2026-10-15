@@ -17,6 +17,7 @@ import {
 import { resolveProductId, getQualityOptions, getQualityOptionById } from "../catalog/options.js";
 import { nextOrderId } from "../session/orderId.js";
 import { triggerMockupDelivery } from "../mockup/deliverTrigger.js";
+import { peekUsage } from "../mockup/quota.js";
 import { generateUpiQrPng } from "../qr/index.js";
 import { getEnv } from "../config/env.js";
 import { saveOrderSnapshot } from "../session/orderStore.js";
@@ -396,10 +397,16 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
       } else {
         let placement = input.startsWith("placement:") ? input.replace("placement:", "") : "";
         if (!placement) {
-          if (lower.includes("chest") || lower.includes("front") || lower === "1") placement = "chest_left";
-          else if (lower.includes("back") || lower === "2") placement = "back_center";
-          else if (lower.includes("sleeve") || lower === "3") placement = "sleeve_left";
+          if (lower.includes("chest") || lower.includes("left") || lower === "1") placement = "left_chest";
+          else if (lower.includes("front") || lower.includes("center") || lower.includes("centre") || lower === "2") placement = "center_front";
+          else if (lower.includes("back") || lower === "3") placement = "upper_back";
+          else if (lower.includes("left sleeve") || lower === "4") placement = "left_sleeve";
+          else if (lower.includes("right sleeve") || lower === "5") placement = "right_sleeve";
         }
+        if (placement === "centre_front") placement = "center_front";
+        if (placement === "chest_left") placement = "left_chest";
+        if (placement === "back_center") placement = "upper_back";
+        if (placement === "sleeve_left") placement = "left_sleeve";
         if (placement) {
           draft.logos = draft.logos || [];
           draft.logos.push({ placement: placement as any, fileId: "" });
@@ -451,10 +458,20 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
           draft.orderId = await nextOrderId();
         }
 
+        // 1. Tell the user how many free mockups they have before generating
+        const usage = await peekUsage(`wa:${chatId}`, { phone: draft.phone }).catch(() => undefined);
+        const remaining = usage ? Math.max(0, usage.freeAllowance - usage.committedFreeThisMonth) : 3;
+        const freeText = remaining > 0
+          ? `🎨 You have **${remaining} free mockup preview${remaining === 1 ? "" : "s"}** remaining this month. Generating your preview on the garment now — one moment…`
+          : `🎨 Generating your preview on the garment now — one moment…`;
+        await sendMessage(chatId, freeText);
+
+        // 2. Deliver the mockup
         const order = assembleOrderData(chatId, draft);
         await saveOrderSnapshot(order).catch(() => {});
         await triggerMockupDelivery(order.orderId);
         
+        // 3. Save draft and then prompt for payment
         await saveDraft(chatId, draft);
         await promptNext(chatId, draft);
       } else if (input === "mockup:skip" || lowerMockup.includes("skip") || lowerMockup === "2" || lowerMockup === "no") {
@@ -585,7 +602,7 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
     case "logoPlacement":
       await sendMenu(chatId, COPY.placementAsk, [
         { id: "placement:left_chest", title: "Left Chest" },
-        { id: "placement:centre_front", title: "Centre Front" },
+        { id: "placement:center_front", title: "Centre Front" },
         { id: "placement:upper_back", title: "Upper Back" },
         { id: "placement:left_sleeve", title: "Left Sleeve" },
         { id: "placement:right_sleeve", title: "Right Sleeve" },
@@ -601,12 +618,19 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
         { id: "logo:done", title: "No more, continue" }
       ]);
       break;
-    case "mockupDecision":
-      await sendMenu(chatId, COPY.mockupOfferAsk, [
+    case "mockupDecision": {
+      const usage = await peekUsage(`wa:${chatId}`, { phone: draft.phone }).catch(() => undefined);
+      const remaining = usage ? Math.max(0, usage.freeAllowance - usage.committedFreeThisMonth) : 3;
+      const promptText =
+        `📎 Got your logo! Want to see a **preview mockup** of it on your exact selected garment now?\n\n` +
+        `You have **${remaining} free mockup preview${remaining === 1 ? "" : "s"}** available this month.\n\n` +
+        `Choose an option below:`;
+      await sendMenu(chatId, promptText, [
         { id: "mockup:generate", title: "Generate my mockup" },
         { id: "mockup:skip", title: "Skip - go to quote" }
       ]);
       break;
+    }
     case "payment":
       // ---- Assemble Order Data ----
       const tier = draft.tier ?? "standard";
@@ -668,11 +692,13 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
         triggerMockupDelivery(order.orderId);
       }
 
-      const rzpLink = "https://rzp.io/rzp/xb7mCWe";
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=512x512&data=${encodeURIComponent(rzpLink)}`;
-      await sendMedia(chatId, qrUrl);
+      const qrUrl =
+        env.STATIC_QR_URL && !env.STATIC_QR_URL.includes("drive.google.com")
+          ? env.STATIC_QR_URL
+          : "https://bkxivup64ugazlbe.public.blob.vercel-storage.com/payment-qr.jpg";
+      await sendMedia(chatId, qrUrl, "Scan & pay with any UPI app");
       
-      const payMessage = `Thank you! You can make your payment by scanning the QR code above or using this secure link:\n${rzpLink}\n\nOnce done, please send a screenshot of your payment here.`;
+      const payMessage = "Thank you! You can make your payment by scanning the QR code above.\n\nOnce done, please send a screenshot of your payment here.";
       
       if (showsCallMe(qty)) {
         await sendMenu(chatId, payMessage, [
