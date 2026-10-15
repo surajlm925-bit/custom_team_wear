@@ -13,7 +13,7 @@
  * endpoint and to log.
  */
 
-export const BUILD_STAMP = "2026-10-15-vercel-env-token-sync";
+export const BUILD_STAMP = "2026-10-15-e2e-user-flow-tested";
 
 export interface BuildInfo {
   buildStamp: string;

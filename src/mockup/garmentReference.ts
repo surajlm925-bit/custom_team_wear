@@ -29,7 +29,9 @@ import { getColorHex, normalizeColorName } from "../catalog/colorHex.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = path.resolve(__dirname, "../../assets/mockup-templates");
 const POLO_WHITE_PATH = path.join(TEMPLATES_DIR, "polo_white.png");
+const POLO_WHITE_BACK_PATH = path.join(TEMPLATES_DIR, "polo_white_back.png");
 const ROUNDNECK_WHITE_PATH = path.join(TEMPLATES_DIR, "round_neck_white.png");
+const ROUNDNECK_WHITE_BACK_PATH = path.join(TEMPLATES_DIR, "round_neck_white_back.png");
 
 /** Human-facing description of the exact garment, used to preserve brand/style/colour in the mockup prompt. */
 export interface GarmentDescriptor {
@@ -93,7 +95,9 @@ export async function resolveGarmentReference(order: OrderData, view: "front" | 
   const resolvedColorName = normalizeColorName(order.catalogSelection?.colorName ?? "");
   const colorHex = resolvedColorName ? getColorHex(resolvedColorName) : null;
   const isPolo = silhouette === "polo";
-  const templatePath = isPolo ? POLO_WHITE_PATH : ROUNDNECK_WHITE_PATH;
+  const templatePath = isPolo
+    ? (view === "back" ? POLO_WHITE_BACK_PATH : POLO_WHITE_PATH)
+    : (view === "back" ? ROUNDNECK_WHITE_BACK_PATH : ROUNDNECK_WHITE_PATH);
   const buffer = fs.readFileSync(templatePath);
   const descriptor: GarmentDescriptor = {
     garmentType: silhouette,

@@ -364,6 +364,21 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
       }
       if (matchedColor) {
         draft.colorName = matchedColor;
+        draft.catalogSelection = {
+          catalogVersion: "v1",
+          tier: draft.tier!,
+          groupId: draft.fabric ?? "polyester",
+          groupLabel: draft.fabric ?? "Polyester",
+          itemId: draft.qualityOptionId ?? "standard",
+          itemLabel: draft.qualityOptionName ?? "Standard Quality",
+          productId: draft.productId!,
+          garmentType: (draft.garmentSilhouette === "collar" ? "polo" : "round_neck") as any,
+          sourceId: "catalog",
+          sourcePage: 1,
+          colorName: matchedColor,
+          referenceImageKind: "placeholder",
+          mockupEligible: true,
+        };
         await saveDraft(chatId, draft);
         await promptNext(chatId, draft);
       } else {
@@ -583,6 +598,21 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
       const quality = getQualityOptionById(draft.tier!, draft.productId!, draft.qualityOptionId!);
       if (!quality || quality.colors.length === 0) {
         draft.colorName = "Default";
+        draft.catalogSelection = {
+          catalogVersion: "v1",
+          tier: draft.tier!,
+          groupId: draft.fabric ?? "polyester",
+          groupLabel: draft.fabric ?? "Polyester",
+          itemId: draft.qualityOptionId ?? "standard",
+          itemLabel: draft.qualityOptionName ?? "Standard Quality",
+          productId: draft.productId!,
+          garmentType: (draft.garmentSilhouette === "collar" ? "polo" : "round_neck") as any,
+          sourceId: "catalog",
+          sourcePage: 1,
+          colorName: "Default",
+          referenceImageKind: "placeholder",
+          mockupEligible: true,
+        };
         await saveDraft(chatId, draft);
         await promptNext(chatId, draft);
       } else {
