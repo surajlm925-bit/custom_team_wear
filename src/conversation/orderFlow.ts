@@ -45,13 +45,15 @@ export async function handleWhatsAppMessage(chatId: string, message: any) {
     message.interactive?.list_reply?.title ||
     message.button?.payload ||
     message.button?.text;
-  const isImage = !!message.image;
-  if (isImage) {
+  const isMedia = Boolean(message.image || message.document);
+  if (message.image) {
     input = message.image.id;
+  } else if (message.document) {
+    input = message.document.id;
   }
 
-  if (!input && !isImage) {
-    console.log(`[orderFlow] Empty input and not image, returning early.`);
+  if (!input && !isMedia) {
+    console.log(`[orderFlow] Empty input and not media, returning early.`);
     return;
   }
 

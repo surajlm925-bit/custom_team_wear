@@ -13,7 +13,7 @@
  * endpoint and to log.
  */
 
-export const BUILD_STAMP = "2026-10-14-email-portal-2step-otp-failsafe";
+export const BUILD_STAMP = "2026-10-15-resend-live-diagnostics";
 
 export interface BuildInfo {
   buildStamp: string;

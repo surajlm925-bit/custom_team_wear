@@ -72,7 +72,7 @@ async function main() {
     timeline: "standard",
     timelineUrgent: false,
     logoReceived: true,
-    logos: [{ fileId: "test_logo_id", placement: "chest_left" }],
+    logos: [{ fileId: "test_logo_id", placement: "left_chest" }],
     garmentRate: 359,
     garmentTotal: 53850,
     printEstLow: 3750,

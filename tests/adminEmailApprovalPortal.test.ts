@@ -46,7 +46,7 @@ function createMockOrder(orderId = "CTW-261014-01"): OrderData {
     timeline: "standard",
     timelineUrgent: false,
     logoReceived: true,
-    logos: [{ fileId: "mock_logo_id", placement: "chest_left" }],
+    logos: [{ fileId: "mock_logo_id", placement: "left_chest" }],
     garmentRate: 359,
     garmentTotal: 35900,
     printEstLow: 2500,

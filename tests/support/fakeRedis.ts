@@ -11,7 +11,7 @@ import type { RedisLike } from "../../src/session/redisClient.js";
 
 export class FakeRedis implements RedisLike {
   private store = new Map<string, string>();
-  private ttl = new Map<string, number>();
+  private ttlMap = new Map<string, number>();
 
   async get<T = unknown>(key: string): Promise<T | null> {
     const raw = this.store.get(key);
@@ -30,7 +30,7 @@ export class FakeRedis implements RedisLike {
   ): Promise<string | null> {
     if (opts?.nx && this.store.has(key)) return null;
     this.store.set(key, JSON.stringify(value));
-    if (opts?.ex !== undefined) this.ttl.set(key, opts.ex);
+    if (opts?.ex !== undefined) this.ttlMap.set(key, opts.ex);
     return "OK";
   }
 
@@ -44,12 +44,12 @@ export class FakeRedis implements RedisLike {
 
   async expire(key: string, seconds: number): Promise<number> {
     if (!this.store.has(key)) return 0;
-    this.ttl.set(key, seconds);
+    this.ttlMap.set(key, seconds);
     return 1;
   }
 
   async ttl(key: string): Promise<number> {
-    const val = this.ttl.get(key);
+    const val = this.ttlMap.get(key);
     return val !== undefined ? val : -2;
   }
 
@@ -57,7 +57,7 @@ export class FakeRedis implements RedisLike {
     let removed = 0;
     for (const k of keys) {
       if (this.store.delete(k)) removed++;
-      this.ttl.delete(k);
+      this.ttlMap.delete(k);
     }
     return removed;
   }
