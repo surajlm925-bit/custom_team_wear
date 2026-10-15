@@ -9,7 +9,6 @@
  * surfaced via the returned outcome.
  */
 
-import { getEnv } from "../config/env.js";
 import type { MockupView, OrderData } from "../shared/types.js";
 import { generateDeterministicMockups } from "./composite.js";
 import { isLegacyOrderWithoutCatalog, isMockupEligible } from "./garmentReference.js";
@@ -19,31 +18,13 @@ import { uploadMockupImage, type BlobUploader } from "../storage/blob.js";
 import { loadGeneration, advanceStatus, recordOutput } from "./generationStore.js";
 import { commitFreeGeneration, releaseReservation } from "./quota.js";
 import { notifyAdminsText } from "../admin/notify.js";
-
 import { sendMedia } from "../whatsapp/metaClient.js";
+import { fetchMetaMediaBuffer } from "../whatsapp/media.js";
 
 /** Extracts the numeric or string WhatsApp chat id. */
 function extractWhatsAppChatId(customerChatId: string): string | null {
   const match = /^wa:(.+)$/.exec(customerChatId);
   return match ? match[1] : customerChatId;
-}
-
-async function fetchMetaMediaBuffer(fileId: string): Promise<Buffer> {
-  const env = getEnv();
-  // Step 1: Get media URL from WhatsApp API
-  const metaRes = await fetch(`https://graph.facebook.com/v20.0/${fileId}`, {
-    headers: { Authorization: `Bearer ${env.META_API_TOKEN}` }
-  });
-  const meta = await metaRes.json() as { url?: string };
-  if (!meta.url) throw new Error("WhatsApp media has no URL");
-  
-  // Step 2: Download media using the URL and token
-  const response = await fetch(meta.url, {
-    headers: { Authorization: `Bearer ${env.META_API_TOKEN}` }
-  });
-  if (!response.ok) throw new Error(`Failed to download WhatsApp file (${response.status})`);
-  const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
 }
 
 function guessMimeTypeFromBuffer(buffer: Buffer): string {

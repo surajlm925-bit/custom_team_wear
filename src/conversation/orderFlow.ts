@@ -451,7 +451,7 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
           draft.orderId = await nextOrderId();
         }
 
-        const order: any = { orderId: draft.orderId, logoReceived: draft.logoReceived, logos: draft.logos };
+        const order = assembleOrderData(chatId, draft);
         await saveOrderSnapshot(order).catch(() => {});
         await triggerMockupDelivery(order.orderId);
         

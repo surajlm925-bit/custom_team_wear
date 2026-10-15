@@ -30,10 +30,33 @@ export async function fetchMetaMediaBuffer(fileId: string): Promise<Buffer> {
     const meta = (await metaRes.json()) as { url?: string };
     if (!meta.url) throw new Error("WhatsApp media has no download URL");
 
-    const response = await fetch(meta.url, { headers, signal: controller.signal });
+    const dlHeaders: Record<string, string> = {
+      Authorization: `Bearer ${env.META_API_TOKEN}`,
+      "User-Agent": "CustomTeamwearBot/1.0",
+    };
+
+    let response = await fetch(meta.url, {
+      headers: dlHeaders,
+      redirect: "manual",
+      signal: controller.signal,
+    });
+
+    if (response.status >= 300 && response.status < 400 && response.headers.get("location")) {
+      const redirectUrl = response.headers.get("location")!;
+      response = await fetch(redirectUrl, { signal: controller.signal });
+    }
+
+    if (!response.ok) {
+      // Fallback: standard follow without manual redirect
+      response = await fetch(meta.url, { headers: dlHeaders, signal: controller.signal });
+    }
+
     clearTimeout(timeoutId);
 
-    if (!response.ok) throw new Error(`Failed to download WhatsApp media file (${response.status})`);
+    if (!response.ok) {
+      const errText = await response.text().catch(() => "");
+      throw new Error(`Failed to download WhatsApp media file (${response.status}): ${errText}`);
+    }
     const arrayBuffer = await response.arrayBuffer();
     return Buffer.from(arrayBuffer);
   } catch (err) {
