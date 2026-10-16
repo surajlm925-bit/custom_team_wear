@@ -93,3 +93,33 @@ test("standard mix always sums exactly to qty — AC11", () => {
     }
   }
 });
+
+test("variant-specific rates from pricing_options_template.csv", () => {
+  // Finch Superia Mars: 429 for 50-99, 399 for 100+
+  const superia50 = computeGarmentTotal("standard", "dry_fit_polo", 80, "rec-dfp-finch-superia");
+  assert.equal(superia50.ratePerPiece, 429);
+  assert.equal(superia50.total, 80 * 429);
+
+  const superia100 = computeGarmentTotal("standard", "dry_fit_polo", 120, "rec-dfp-finch-superia");
+  assert.equal(superia100.ratePerPiece, 399);
+  assert.equal(superia100.total, 120 * 399);
+
+  // Finch Classic Polo (in cotton polo): 489 for 50-99, 459 for 100+
+  const classic50 = computeGarmentTotal("standard", "cotton_polo", 75, "rec-dfp-finch-classic-polo");
+  assert.equal(classic50.ratePerPiece, 489);
+  assert.equal(classic50.total, 75 * 489);
+
+  const classic100 = computeGarmentTotal("standard", "cotton_polo", 150, "rec-dfp-finch-classic-polo");
+  assert.equal(classic100.ratePerPiece, 459);
+  assert.equal(classic100.total, 150 * 459);
+
+  // Basic Finch Active Mars: 199 for 50-99, 179 for 100+
+  const activeMars50 = computeGarmentTotal("basic", "dry_fit_round_neck", 60, "val-dfrn-finch-active-mars");
+  assert.equal(activeMars50.ratePerPiece, 199);
+  assert.equal(activeMars50.total, 60 * 199);
+
+  const activeMars100 = computeGarmentTotal("basic", "dry_fit_round_neck", 100, "val-dfrn-finch-active-mars");
+  assert.equal(activeMars100.ratePerPiece, 179);
+  assert.equal(activeMars100.total, 100 * 179);
+});
+

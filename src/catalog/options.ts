@@ -120,6 +120,11 @@ export const CATALOG_OPTIONS: Record<Tier, Record<ProductId, QualityOption[]>> =
         id: "rec-cp-finch-classic",
         name: "Finch Classic Collection",
         colors: ["Black", "Bottle Green", "Charcoal Grey", "Grey Melange", "Maroon", "Navy Blue", "Red", "Royal Blue", "Turquoise Blue", "White"]
+      },
+      {
+        id: "rec-dfp-finch-classic-polo",
+        name: "Finch Classic Polo (260 GSM)",
+        colors: ["Black", "Charcoal Grey", "Dusty Peach", "Grey Melange", "Navy Blue", "Sky Blue", "White"]
       }
     ],
     dry_fit_polo: [
@@ -127,11 +132,6 @@ export const CATALOG_OPTIONS: Record<Tier, Record<ProductId, QualityOption[]>> =
         id: "rec-dfp-finch-superia",
         name: "Finch Superia Mars (200 GSM)",
         colors: ["Aluminium", "Arrow Red", "Banana Yellow", "Black", "Brick Red", "Carbon Grey", "Charcoal", "Coffee Brown", "French Wine", "Grey Melange", "Harbour Blue", "Indian Green", "Mustard", "Navy Blue", "Olive Green", "Pine Green", "Rama Blue", "Royal Blue", "Sky Blue", "White", "Woody Orange"]
-      },
-      {
-        id: "rec-dfp-finch-classic-polo",
-        name: "Finch Classic Polo (260 GSM)",
-        colors: ["Black", "Charcoal Grey", "Dusty Peach", "Grey Melange", "Navy Blue", "Sky Blue", "White"]
       },
       {
         id: "rec-dfp-finch-piper",

@@ -76,6 +76,7 @@ export async function sendInteractiveButtons(
   to: string,
   text: string,
   buttons: Array<{ id: string; title: string }>,
+  footerText?: string,
 ) {
   console.log(`[metaClient] sendInteractiveButtons to=${to} type=button buttons=${buttons.length}`);
   // WhatsApp Cloud API enforces: max 3 buttons, max 20 chars per title, max 256 chars per id
@@ -94,6 +95,7 @@ export async function sendInteractiveButtons(
     interactive: {
       type: 'button',
       body: { text },
+      ...(footerText ? { footer: { text: footerText.slice(0, 60) } } : {}),
       action: {
         buttons: validButtons
       }
@@ -107,6 +109,7 @@ export async function sendInteractiveList(
   text: string,
   buttonText: string,
   sections: Array<{ title?: string; rows: Array<{ id: string; title: string; description?: string }> }>,
+  footerText?: string,
 ) {
   console.log(`[metaClient] sendInteractiveList to=${to} type=list rows=${sections.reduce((n, s) => n + s.rows.length, 0)}`);
   // WhatsApp Cloud API enforces: max 20 chars button text, max 24 chars row title, max 72 chars description, max 200 chars id
@@ -117,6 +120,7 @@ export async function sendInteractiveList(
     interactive: {
       type: 'list',
       body: { text: text.slice(0, 1024) },
+      ...(footerText ? { footer: { text: footerText.slice(0, 60) } } : {}),
       action: {
         button: buttonText.slice(0, 20),
         sections: sections.slice(0, 10).map(section => ({

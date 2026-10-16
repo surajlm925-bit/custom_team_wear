@@ -34,6 +34,8 @@ export interface OrderDraft {
   mockupDecision?: "skip" | "generate";
   paymentScreenshotId?: string;
   orderId?: string;
+  confirmingCancel?: boolean;
+  choosingPlacement?: boolean;
   updatedAt?: number;
 }
 

@@ -62,17 +62,78 @@ export async function handleWhatsAppMessage(chatId: string, message: any) {
   const ctx: WhatsAppContext = { chatId, message, input: input.trim() };
   let draft = (await loadDraft(chatId)) || {};
 
-  // Support global cancel/reset/start
   const lowerInput = ctx.input.toLowerCase();
-  if (lowerInput === "cancel" || lowerInput === "back_to_start") {
-    await clearDraft(chatId);
-    await sendMessage(chatId, COPY.discardGoodbye);
+
+  // 1. If currently awaiting cancel confirmation:
+  if (draft.confirmingCancel) {
+    if (
+      lowerInput === "cancel:confirm" ||
+      lowerInput === "yes" ||
+      lowerInput === "cancel" ||
+      lowerInput === "y" ||
+      lowerInput.includes("yes, cancel") ||
+      lowerInput.includes("confirm cancel")
+    ) {
+      await clearDraft(chatId);
+      await sendMessage(chatId, COPY.discardGoodbye);
+      return;
+    }
+    // Any other button or text resumes order:
+    draft.confirmingCancel = false;
+    await saveDraft(chatId, draft);
+    await sendMessage(chatId, "▶️ Order resumed! Let's continue:");
+    await promptNext(chatId, draft, false);
     return;
   }
 
+  // 2. Intercept cancel command -> ask for confirmation
+  if (
+    lowerInput === "cancel" ||
+    lowerInput === "exit" ||
+    lowerInput === "/cancel" ||
+    lowerInput === "stop" ||
+    lowerInput === "back_to_start"
+  ) {
+    draft.confirmingCancel = true;
+    await saveDraft(chatId, draft);
+    await sendMenu(
+      chatId,
+      "⚠️ **Are you sure you want to cancel your order?**\n\nYour entered details will be discarded.",
+      [
+        { id: "cancel:confirm", title: "❌ Yes, Cancel" },
+        { id: "cancel:resume", title: "▶️ Continue Order" }
+      ],
+      "Cancel Options",
+      ""
+    );
+    return;
+  }
+
+  // 3. Global restart / reset command
   if (lowerInput === "/start" || lowerInput === "start" || lowerInput === "restart" || lowerInput === "reset") {
     await clearDraft(chatId);
     await promptNext(chatId, {}, false);
+    return;
+  }
+
+  // 4. Global back navigation (button click or typed keyword)
+  if (
+    lowerInput === "back" ||
+    lowerInput === "b" ||
+    lowerInput === "undo" ||
+    lowerInput === "prev" ||
+    lowerInput === "previous" ||
+    lowerInput === "nav:back" ||
+    lowerInput === "⬅️ back"
+  ) {
+    const rolledBack = rollbackStep(draft);
+    if (!rolledBack) {
+      await sendMessage(chatId, "You're already at the beginning of the order flow! 👇");
+      await promptNext(chatId, draft, false);
+      return;
+    }
+    await saveDraft(chatId, draft);
+    await promptNext(chatId, draft, false);
     return;
   }
 
@@ -112,7 +173,7 @@ function determineStep(draft: OrderDraft): string {
     if (!draft.colorName) return "catalogColor";
     if (!draft.printMethod) return "printMethod";
     if (draft.logoReceived === undefined) {
-      if (!draft.logos || draft.logos.length === 0) {
+      if (!draft.logos || draft.logos.length === 0 || draft.choosingPlacement) {
         return "logoPlacement";
       }
       const lastLogo = draft.logos[draft.logos.length - 1];
@@ -128,6 +189,132 @@ function determineStep(draft: OrderDraft): string {
   if (!draft.paymentScreenshotId) return "payment";
 
   return "completed";
+}
+
+export function rollbackStep(draft: OrderDraft): boolean {
+  const currentStep = determineStep(draft);
+
+  switch (currentStep) {
+    case "orderType":
+      return false;
+
+    case "garmentSilhouette":
+      delete draft.orderType;
+      return true;
+
+    case "sampleFabric":
+      delete draft.garmentSilhouette;
+      return true;
+
+    case "qty":
+      delete draft.garmentSilhouette;
+      return true;
+
+    case "city":
+      if (draft.orderType === "sample") {
+        delete draft.fabric;
+        delete draft.qty;
+        delete draft.sizeSplit;
+        delete draft.tier;
+        delete draft.productId;
+      } else {
+        delete draft.qty;
+        delete draft.sizeSplit;
+      }
+      return true;
+
+    case "name":
+      delete draft.city;
+      return true;
+
+    case "phone":
+      delete draft.name;
+      return true;
+
+    case "timeline":
+      delete draft.phone;
+      return true;
+
+    case "tier":
+      delete draft.timeline;
+      delete draft.timelineUrgent;
+      return true;
+
+    case "catalogFabric":
+      delete draft.tier;
+      return true;
+
+    case "catalogQuality":
+      delete draft.fabric;
+      delete draft.productId;
+      return true;
+
+    case "catalogColor": {
+      delete draft.qualityOptionId;
+      delete draft.qualityOptionName;
+      const qualities = (draft.tier && draft.productId) ? getQualityOptions(draft.tier, draft.productId) : [];
+      if (qualities.length <= 1) {
+        delete draft.fabric;
+        delete draft.productId;
+      }
+      return true;
+    }
+
+    case "printMethod": {
+      delete draft.colorName;
+      delete draft.catalogSelection;
+      const quality = (draft.tier && draft.productId && draft.qualityOptionId)
+        ? getQualityOptionById(draft.tier, draft.productId, draft.qualityOptionId)
+        : undefined;
+      if (!quality || quality.colors.length === 0) {
+        delete draft.qualityOptionId;
+        delete draft.qualityOptionName;
+        const qualities = (draft.tier && draft.productId) ? getQualityOptions(draft.tier, draft.productId) : [];
+        if (qualities.length <= 1) {
+          delete draft.fabric;
+          delete draft.productId;
+        }
+      }
+      return true;
+    }
+
+    case "logoPlacement":
+      if (draft.choosingPlacement) {
+        draft.choosingPlacement = false;
+        return true;
+      }
+      delete draft.printMethod;
+      return true;
+
+    case "logoUpload":
+      draft.logos?.pop();
+      return true;
+
+    case "logoMore":
+      if (draft.logos && draft.logos.length > 0) {
+        const last = draft.logos[draft.logos.length - 1];
+        delete (last as any).fileId;
+      }
+      return true;
+
+    case "mockupDecision":
+      draft.logoReceived = undefined;
+      return true;
+
+    case "payment":
+      if (draft.orderType === "sample") {
+        delete draft.timeline;
+        delete draft.timelineUrgent;
+      } else if (draft.logos && draft.logos.length > 0) {
+        delete draft.mockupDecision;
+      } else {
+        draft.logoReceived = undefined;
+      }
+      return true;
+
+    default:
+      return false;
+  }
 }
 
 async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string) {
@@ -423,6 +610,7 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
         if (placement === "back_center") placement = "upper_back";
         if (placement === "sleeve_left") placement = "left_sleeve";
         if (placement) {
+          draft.choosingPlacement = false;
           draft.logos = draft.logos || [];
           draft.logos.push({ placement: placement as any, fileId: "" });
           await saveDraft(chatId, draft);
@@ -438,25 +626,23 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
       if (ctx.message.image) {
         const lastLogo = draft.logos![draft.logos!.length - 1];
         lastLogo.fileId = input; // image id
-        draft.logoReceived = true;
+        delete draft.choosingPlacement;
         await saveDraft(chatId, draft);
-        // After upload, prompt for more logos
-        // We use a dummy step for this
         await promptNext(chatId, draft); // Maps to "logoMore"
       } else {
-        await sendMessage(chatId, COPY.logoUploadPrompt);
+        await sendMessage(chatId, COPY.logoUploadPrompt + "\n\n_(Reply 'back' to go back, 'cancel' to restart)_");
       }
       break;
       
     case "logoMore":
       const lowerLogoMore = input.toLowerCase().trim();
       if (input === "logo:more" || lowerLogoMore.includes("more") || lowerLogoMore.includes("add") || lowerLogoMore === "1") {
-        // user wants more logos, remove the "logoReceived" flag so determineStep goes back to logoPlacement
-        draft.logoReceived = undefined;
+        draft.choosingPlacement = true;
         await saveDraft(chatId, draft);
         await promptNext(chatId, draft);
       } else if (input === "logo:done" || lowerLogoMore.includes("done") || lowerLogoMore.includes("continue") || lowerLogoMore.includes("no") || lowerLogoMore === "2") {
-        // user is done
+        draft.choosingPlacement = false;
+        draft.logoReceived = true;
         await saveDraft(chatId, draft);
         await promptNext(chatId, draft);
       } else {
@@ -538,26 +724,28 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
     case "garmentSilhouette":
       await sendMenu(chatId, COPY.garmentSilhouetteAsk, [
         { id: "garment:round_neck", title: "Round Neck" },
-        { id: "garment:collar", title: "Collar / Polo" }
+        { id: "garment:collar", title: "Collar / Polo" },
+        { id: "nav:back", title: "⬅️ Back" }
       ]);
       break;
     case "sampleFabric":
       await sendMenu(chatId, COPY.sampleKitFabricAsk, [
         { id: "fabric:cotton", title: "100% Cotton" },
-        { id: "fabric:polyester", title: "Dry Fit" }
+        { id: "fabric:polyester", title: "Dry Fit" },
+        { id: "nav:back", title: "⬅️ Back" }
       ]);
       break;
     case "qty":
-      await sendMessage(chatId, COPY.qtyAsk);
+      await sendMessage(chatId, COPY.qtyAsk + "\n\n_(Reply 'back' to go back, 'cancel' to restart)_");
       break;
     case "city":
-      await sendMessage(chatId, COPY.cityAsk);
+      await sendMessage(chatId, COPY.cityAsk + "\n\n_(Reply 'back' to go back, 'cancel' to restart)_");
       break;
     case "name":
-      await sendMessage(chatId, COPY.nameAsk);
+      await sendMessage(chatId, COPY.nameAsk + "\n\n_(Reply 'back' to go back, 'cancel' to restart)_");
       break;
     case "phone":
-      await sendMessage(chatId, COPY.phoneAsk);
+      await sendMessage(chatId, COPY.phoneAsk + "\n\n_(Reply 'back' to go back, 'cancel' to restart)_");
       break;
     case "timeline":
       await sendMenu(chatId, COPY.timelineAsk, [
@@ -568,15 +756,16 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
       break;
     case "tier":
       await sendMenu(chatId, COPY.welcome, [
-        { id: "tier:basic", title: "Basic (from ₹169)" },
-        { id: "tier:standard", title: "Standard (from ₹219)" },
-        { id: "tier:premium", title: "Premium (from ₹499)" }
+        { id: "tier:basic", title: "Basic" },
+        { id: "tier:standard", title: "Standard" },
+        { id: "tier:premium", title: "Premium" }
       ]);
       break;
     case "catalogFabric":
       await sendMenu(chatId, COPY.fabricAsk, [
         { id: "fabric:cotton", title: "100% Cotton" },
-        { id: "fabric:polyester", title: "Polyester DryFit" }
+        { id: "fabric:polyester", title: "Polyester DryFit" },
+        { id: "nav:back", title: "⬅️ Back" }
       ]);
       break;
     case "catalogQuality":
@@ -587,10 +776,14 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
         await saveDraft(chatId, draft);
         await promptNext(chatId, draft);
       } else {
+        const qualityMenuOptions = qualities.map((q) => ({ id: `optquality:${q.id}`, title: q.name }));
+        if (qualityMenuOptions.length < 10) {
+          qualityMenuOptions.push({ id: "nav:back", title: "⬅️ Back" });
+        }
         await sendMenu(
           chatId, 
           COPY.catalogQualityAsk, 
-          qualities.map(q => ({ id: `optquality:${q.id}`, title: q.name }))
+          qualityMenuOptions
         );
       }
       break;
@@ -616,17 +809,22 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
         await saveDraft(chatId, draft);
         await promptNext(chatId, draft);
       } else {
+        const colorMenuOptions = quality.colors.map((c) => ({ id: `color:${c}`, title: c }));
+        if (colorMenuOptions.length < 10) {
+          colorMenuOptions.push({ id: "nav:back", title: "⬅️ Back" });
+        }
         await sendMenu(
           chatId,
           "Now choose your garment colour:",
-          quality.colors.map(c => ({ id: `color:${c}`, title: c }))
+          colorMenuOptions
         );
       }
       break;
     case "printMethod":
       await sendMenu(chatId, COPY.brandingTypeAsk, [
         { id: "branding:print", title: "Print (Screen/DTF)" },
-        { id: "branding:embroidery", title: "Embroidery" }
+        { id: "branding:embroidery", title: "Embroidery" },
+        { id: "nav:back", title: "⬅️ Back" }
       ]);
       break;
     case "logoPlacement":
@@ -636,16 +834,18 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
         { id: "placement:upper_back", title: "Upper Back" },
         { id: "placement:left_sleeve", title: "Left Sleeve" },
         { id: "placement:right_sleeve", title: "Right Sleeve" },
-        { id: "logo:skip", title: "Skip - no artwork" }
+        { id: "logo:skip", title: "Skip - no artwork" },
+        { id: "nav:back", title: "⬅️ Back" }
       ], "View Placements");
       break;
     case "logoUpload":
-      await sendMessage(chatId, COPY.logoUploadPrompt);
+      await sendMessage(chatId, COPY.logoUploadPrompt + "\n\n_(Reply 'back' to go back, 'cancel' to restart)_");
       break;
     case "logoMore":
       await sendMenu(chatId, COPY.addAnotherLogoAsk(draft.logos!.length), [
         { id: "logo:more", title: "Add another logo" },
-        { id: "logo:done", title: "No more, continue" }
+        { id: "logo:done", title: "No more, continue" },
+        { id: "nav:back", title: "⬅️ Back" }
       ]);
       break;
     case "mockupDecision": {
@@ -657,7 +857,8 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
         `Choose an option below:`;
       await sendMenu(chatId, promptText, [
         { id: "mockup:generate", title: "Generate my mockup" },
-        { id: "mockup:skip", title: "Skip - go to quote" }
+        { id: "mockup:skip", title: "Skip - go to quote" },
+        { id: "nav:back", title: "⬅️ Back" }
       ]);
       break;
     }
@@ -671,7 +872,7 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
       
       const garment = isSample
         ? computeSampleKitTotal(draft.fabric ?? "polyester")
-        : computeGarmentTotal(tier, productId, qty);
+        : computeGarmentTotal(tier, productId, qty, draft.qualityOptionId);
       const printEstimate = isSample ? { low: 0, high: 0 } : computePrintEstimate(draft.printMethod!, qty);
       const grandEstimate = isSample
         ? { low: garment.total, high: garment.total }
@@ -732,10 +933,13 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
       
       if (showsCallMe(qty)) {
         await sendMenu(chatId, payMessage, [
-          { id: "callme", title: "📞 Request Callback" }
+          { id: "callme", title: "📞 Request Callback" },
+          { id: "nav:back", title: "⬅️ Back" }
         ]);
       } else {
-        await sendMessage(chatId, payMessage);
+        await sendMenu(chatId, payMessage, [
+          { id: "nav:back", title: "⬅️ Back" }
+        ]);
       }
       break;
   }
@@ -750,7 +954,7 @@ function assembleOrderData(chatId: string, draft: OrderDraft): OrderData {
 
   const garment = isSample
     ? computeSampleKitTotal(draft.fabric ?? "polyester")
-    : computeGarmentTotal(tier, productId, qty);
+    : computeGarmentTotal(tier, productId, qty, draft.qualityOptionId);
   const printEstimate = isSample ? { low: 0, high: 0 } : computePrintEstimate(draft.printMethod!, qty);
   const grandEstimate = isSample
     ? { low: garment.total, high: garment.total }

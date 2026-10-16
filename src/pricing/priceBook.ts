@@ -109,6 +109,61 @@ export const PRODUCT_CATALOG: ProductCatalogEntry[] = [
   },
 ];
 
+/**
+ * Variant-specific rates [50-99 rate, 100+ rate] ex-GST per piece,
+ * derived from the pricing_options_template.csv.
+ */
+export const VARIANT_RATES: Record<string, [number, number]> = {
+  // Basic Cotton Polo
+  "val-cp-1-uf-008": [389, 359],
+  "val-cp-2-uf-010": [389, 359],
+  "val-cp-3-uf-011": [389, 359],
+  "val-cp-4-uf-007-plain": [389, 359],
+  "val-cp-5-uf-007-tipping": [389, 359],
+  "val-cp-6-uf-premium": [389, 359],
+  "val-cp-7-uf-009": [389, 359],
+
+  // Basic Dry Fit Polo
+  "val-dfp-1-uf-008": [289, 249],
+  "val-dfp-2-uf-010": [289, 249],
+  "val-dfp-3-uf-011": [289, 249],
+  "val-dfp-4-uf-007-plain": [289, 249],
+  "val-dfp-5-uf-007-tipping": [289, 249],
+  "val-dfp-6-uf-premium": [289, 249],
+  "val-dfp-7-uf-009": [289, 249],
+
+  // Basic Round Necks
+  "val-crn-finch-bio-wash": [259, 239],
+  "val-dfrn-finch-active-mars": [199, 179],
+
+  // Standard Cotton Polo
+  "rec-cp-finch-classic": [469, 429],
+  "rec-dfp-finch-classic-polo": [489, 459],
+
+  // Standard Dry Fit Polo
+  "rec-dfp-finch-superia": [429, 399],
+  "rec-dfp-finch-piper": [489, 459],
+  "rec-dfp-finch-jacquard": [489, 459],
+
+  // Standard Round Necks
+  "rec-crn-finch-bio-wash": [319, 289],
+  "rec-dfrn-finch-active-mars": [219, 199],
+
+  // Premium Branded Cotton Polo
+  "prem-vh-polo": [869, 789],
+  "prem-stellars-softberry": [869, 789],
+
+  // Premium Branded Dry Fit Polo
+  "prem-adidas-polo": [789, 769],
+  "prem-reebok-polo": [789, 769],
+  "prem-stellars-nano-dry": [709, 689],
+
+  // Premium Branded Round Necks
+  "prem-vh-rn": [599, 529],
+  "prem-adidas-rn": [599, 579],
+  "prem-reebok-rn": [599, 579],
+};
+
 export type PrintMethod =
   | "screen_print"
   | "dtf"

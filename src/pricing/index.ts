@@ -13,6 +13,7 @@ import {
   MOCKUP_PRICES,
   SIZE_KEYS,
   STANDARD_MIX_WEIGHTS,
+  VARIANT_RATES,
   type PrintMethod,
   type ProductId,
   type SizeKey,
@@ -42,8 +43,17 @@ export function getPrintMethod(id: PrintMethod) {
   return method;
 }
 
-/** Garment rate per piece for a given tier/product/qty. EXACT figure. */
-export function getGarmentRate(tier: Tier, productId: ProductId, qty: number): number {
+/** Garment rate per piece for a given tier/product/qty and optional variantId. EXACT figure. */
+export function getGarmentRate(
+  tier: Tier,
+  productId: ProductId,
+  qty: number,
+  variantId?: string,
+): number {
+  if (variantId && VARIANT_RATES[variantId]) {
+    const [rate50, rate100] = VARIANT_RATES[variantId];
+    return getBracket(qty) === "100+" ? rate100 : rate50;
+  }
   const product = getProduct(productId);
   const [rate50, rate100] = product.rates[tier];
   return getBracket(qty) === "100+" ? rate100 : rate50;
@@ -54,10 +64,11 @@ export function getNextBracketRate(
   tier: Tier,
   productId: ProductId,
   qty: number,
+  variantId?: string,
 ): { nextBracketQty: number; nextRate: number; savingsTotal: number } | null {
   if (getBracket(qty) === "100+") return null;
-  const currentRate = getGarmentRate(tier, productId, qty);
-  const nextRate = getGarmentRate(tier, productId, BRACKET_THRESHOLD);
+  const currentRate = getGarmentRate(tier, productId, qty, variantId);
+  const nextRate = getGarmentRate(tier, productId, BRACKET_THRESHOLD, variantId);
   const savingsTotal = (currentRate - nextRate) * BRACKET_THRESHOLD;
   return { nextBracketQty: BRACKET_THRESHOLD, nextRate, savingsTotal };
 }
@@ -69,8 +80,13 @@ export interface GarmentTotal {
 }
 
 /** EXACT garment total: qty × rate. */
-export function computeGarmentTotal(tier: Tier, productId: ProductId, qty: number): GarmentTotal {
-  const ratePerPiece = getGarmentRate(tier, productId, qty);
+export function computeGarmentTotal(
+  tier: Tier,
+  productId: ProductId,
+  qty: number,
+  variantId?: string,
+): GarmentTotal {
+  const ratePerPiece = getGarmentRate(tier, productId, qty, variantId);
   return { ratePerPiece, qty, total: ratePerPiece * qty };
 }
 
