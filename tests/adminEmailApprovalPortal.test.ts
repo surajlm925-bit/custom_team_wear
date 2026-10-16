@@ -7,13 +7,15 @@ import {
   createApprovalCode,
   resendApprovalCode,
   verifyAndConsumeApprovalCode,
+  getActiveApprovalCode,
 } from "../src/admin/approvalCode.js";
 import {
   createPortalToken,
   verifyPortalToken,
 } from "../src/admin/approvalToken.js";
 import handler from "../api/admin-approve.js";
-import { saveOrderSnapshot } from "../src/session/orderStore.js";
+import { saveOrderSnapshot, loadOrderSnapshot } from "../src/session/orderStore.js";
+import { notifyAdmins } from "../src/admin/notify.js";
 import type { OrderData } from "../src/shared/types.js";
 
 const originalFetch = globalThis.fetch;
@@ -257,3 +259,35 @@ test("admin-approve POST resend_otp: generates secondary code via fail-safe", as
   assert.equal(getData().ok, true);
   assert.ok(getData().message.includes("Secondary verification code sent"));
 });
+
+test("notifyAdmins: snapshots order, generates OTP code, and does NOT send WhatsApp approval to admins", async () => {
+  const redis = new FakeRedis();
+  __setRedisForTests(redis);
+
+  const fetchCalls: Array<{ url: string; body: any }> = [];
+  globalThis.fetch = (async (url: any, init: any) => {
+    const body = init?.body ? (typeof init.body === "string" ? JSON.parse(init.body) : init.body) : {};
+    fetchCalls.push({ url: String(url), body });
+    return new Response(JSON.stringify({ id: "mock_res" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as any;
+
+  const order = createMockOrder("CTW-261016-01");
+  await notifyAdmins(order, "https://example.com/receipt.jpg");
+
+  // 1. Order snapshot saved with payment screenshot URL
+  const snapshot = await loadOrderSnapshot(order.orderId);
+  assert.ok(snapshot);
+  assert.equal(snapshot?.paymentScreenshotUrl, "https://example.com/receipt.jpg");
+
+  // 2. Active 6-digit approval code generated
+  const activeCode = await getActiveApprovalCode("order", order.orderId);
+  assert.ok(activeCode);
+  assert.match(activeCode!, /^\d{6}$/);
+
+  // 3. No Meta Cloud API calls were made (no WhatsApp message sent to admins)
+  assert.ok(!fetchCalls.some((c) => c.url.includes("graph.facebook.com")));
+});
+

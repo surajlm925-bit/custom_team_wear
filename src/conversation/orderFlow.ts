@@ -813,7 +813,7 @@ async function completeOrder(chatId: string, draft: OrderDraft) {
     sheetWriteFailed = true;
   }
 
-  // 3. Trigger admin card with 6-digit confirmation code and screenshot
+  // 3. Trigger admin email alert with 2-step OTP and Web Admin Portal link
   const screenshotIdOrUrl = draft.paymentScreenshotId ?? "";
   try {
     await notifyAdmins(order, screenshotIdOrUrl);

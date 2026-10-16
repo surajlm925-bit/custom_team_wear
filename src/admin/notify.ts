@@ -1,20 +1,16 @@
 import { getEnv } from "../config/env.js";
-import { renderAdminCard } from "../shared/render.js";
 import type { OrderData } from "../shared/types.js";
 import { saveOrderSnapshot } from "../session/orderStore.js";
-import { sendMedia, sendMessage } from "../whatsapp/metaClient.js";
+import { sendMessage } from "../whatsapp/metaClient.js";
 import { getPublicMediaUrl } from "../whatsapp/media.js";
 import { createApprovalCode } from "./approvalCode.js";
 import { createPortalToken, getPortalUrl, getResendOtpUrl } from "./approvalToken.js";
 import { sendAdminOrderAlertEmail } from "./email.js";
 
 /** 
- * Sends the admin alert email with 2-step OTP and portal link,
- * and additionally forwards the card to configured admin WhatsApp chats.
+ * Sends the admin alert email with 2-step OTP and portal link for order verification.
  */
 export async function notifyAdmins(order: OrderData, screenshotUrlOrId: string): Promise<void> {
-  const env = getEnv();
-
   // 1. Convert WhatsApp media ID to public URL if needed
   let publicUrl: string | undefined = undefined;
   if (screenshotUrlOrId) {
@@ -46,35 +42,11 @@ export async function notifyAdmins(order: OrderData, screenshotUrlOrId: string):
     const emailRes = await sendAdminOrderAlertEmail(order, code, portalUrl, resendOtpUrl, publicUrl);
     if (!emailRes.ok) {
       console.warn(`[notifyAdmins] Resend email warning for ${order.orderId}:`, emailRes.error);
+    } else {
+      console.log(`[notifyAdmins] Admin order alert email dispatched successfully for ${order.orderId}`);
     }
   } catch (emailErr) {
     console.error(`[notifyAdmins] Error sending order alert email for ${order.orderId}:`, emailErr);
-  }
-
-  // 6. As a secondary/convenience channel, also send WhatsApp notification to admin chats
-  const card = renderAdminCard(order);
-  const approvalMessage =
-    `${card}\n\n` +
-    `🔐 *Approval Code:* \`${code}\`\n` +
-    `⏱️ (Valid for 30 minutes)\n\n` +
-    `👉 *Review & Confirm on Web Portal:*\n${portalUrl}\n\n` +
-    `Or reply with the 6-digit code \`${code}\`\n\n` +
-    `If there is a payment problem, reply with: *ISSUE ${order.orderId}*`;
-
-  for (const adminChatId of env.ADMIN_CHAT_IDS) {
-    if (publicUrl) {
-      try {
-        await sendMedia(adminChatId, publicUrl, `Payment screenshot for ${order.orderId}`);
-      } catch (err) {
-        console.warn(`[notifyAdmins] Could not send image to admin ${adminChatId}:`, err);
-      }
-    }
-
-    try {
-      await sendMessage(adminChatId, approvalMessage);
-    } catch (err) {
-      console.warn(`[notifyAdmins] Note: WhatsApp message to admin ${adminChatId} could not be delivered (Meta 24h window). Email was dispatched.`);
-    }
   }
 }
 
