@@ -10,10 +10,9 @@ export const COPY = {
     "Pick a quality tier to see products:",
 
   greetingAsk:
-    "👋 Welcome to **Custom Teamwear** — premium custom apparel for corporates, teams, and events!\n\n" +
     "Are you planning a bulk order or would you like to order a trial sample first?",
 
-  garmentSilhouetteAsk: "Choose your garment collar style:",
+  garmentSilhouetteAsk: "Choose your T-shirt style:",
 
   fabricAsk: "Select fabric material:",
 
@@ -24,7 +23,7 @@ export const COPY = {
     "• 1× Recommended Quality\n" +
     "• 1× Premium Quality\n\n" +
     "Select your preferred fabric material:\n" +
-    "⚡ **Polyester Kit**: ₹1,999 total (all 3 shirts)\n" +
+    "⚡ **Dry Fit Kit**: ₹1,999 total (all 3 shirts)\n" +
     "🌿 **Cotton Kit**: ₹2,499 total (all 3 shirts)",
 
   brandingTypeAsk: "How would you like your branding done on the garment?",
@@ -50,7 +49,7 @@ export const COPY = {
   catalogImageConfirmAsk: (label: string) => `Here's **${label}**. Is this the one?`,
   catalogImageMissing: (label: string) =>
     `**${label}** — photo isn't available right now, but here are the details above. Is this the one?`,
-  catalogColorAsk: "Which colour?",
+  catalogColorAsk: "Which T-shirt colour?",
   catalogColorConfirmAsk: (label: string, color: string) =>
     `Here's **${label}** in **${color}**. Use this colour?`,
   catalogColorConfirmMissing: (label: string, color: string) =>
@@ -82,7 +81,7 @@ export const COPY = {
     "Where should this logo go on the garment?\n\n" +
     "1️⃣ Left Chest — Professional company logo\n" +
     "2️⃣ Centre Front — Large logo / design\n" +
-    "3️⃣ Upper Back — Company / event name\n" +
+    "3️⃣ Back Centre — Company / event name\n" +
     "4️⃣ Left Sleeve — Secondary logo / partner logo\n" +
     "5️⃣ Right Sleeve — Secondary logo / partner logo\n\n" +
     "No artwork ready yet? Skip — our design team will help.",

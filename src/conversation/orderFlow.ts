@@ -723,15 +723,15 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
       break;
     case "garmentSilhouette":
       await sendMenu(chatId, COPY.garmentSilhouetteAsk, [
+        { id: "garment:collar", title: "Collared Neck" },
         { id: "garment:round_neck", title: "Round Neck" },
-        { id: "garment:collar", title: "Collar / Polo" },
         { id: "nav:back", title: "⬅️ Back" }
       ]);
       break;
     case "sampleFabric":
       await sendMenu(chatId, COPY.sampleKitFabricAsk, [
-        { id: "fabric:cotton", title: "100% Cotton" },
         { id: "fabric:polyester", title: "Dry Fit" },
+        { id: "fabric:cotton", title: "100% Cotton" },
         { id: "nav:back", title: "⬅️ Back" }
       ]);
       break;
@@ -749,9 +749,9 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
       break;
     case "timeline":
       await sendMenu(chatId, COPY.timelineAsk, [
-        { id: "timeline:urgent", title: "Urgent (Need soon)" },
-        { id: "timeline:standard", title: "Standard (3-4 wks)" },
-        { id: "timeline:flexible", title: "Flexible" }
+        { id: "timeline:urgent", title: "Urgent (1-2 days)" },
+        { id: "timeline:standard", title: "Standard (3-4 days)" },
+        { id: "timeline:flexible", title: "Flexible (6-7 days)" }
       ]);
       break;
     case "tier":
@@ -763,8 +763,8 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
       break;
     case "catalogFabric":
       await sendMenu(chatId, COPY.fabricAsk, [
+        { id: "fabric:polyester", title: "Dry Fit" },
         { id: "fabric:cotton", title: "100% Cotton" },
-        { id: "fabric:polyester", title: "Polyester DryFit" },
         { id: "nav:back", title: "⬅️ Back" }
       ]);
       break;
@@ -815,7 +815,7 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
         }
         await sendMenu(
           chatId,
-          "Now choose your garment colour:",
+          "Now choose your T-shirt colour:",
           colorMenuOptions
         );
       }
@@ -831,7 +831,7 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
       await sendMenu(chatId, COPY.placementAsk, [
         { id: "placement:left_chest", title: "Left Chest" },
         { id: "placement:center_front", title: "Centre Front" },
-        { id: "placement:upper_back", title: "Upper Back" },
+        { id: "placement:upper_back", title: "Back Centre" },
         { id: "placement:left_sleeve", title: "Left Sleeve" },
         { id: "placement:right_sleeve", title: "Right Sleeve" },
         { id: "logo:skip", title: "Skip - no artwork" },

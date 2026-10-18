@@ -254,7 +254,7 @@ export interface LogoPlacementEntry {
 export const LOGO_PLACEMENTS: LogoPlacementEntry[] = [
   { id: "left_chest", label: "Left Chest", hint: "Professional company logo" },
   { id: "center_front", label: "Centre Front", hint: "Large logo / design" },
-  { id: "upper_back", label: "Upper Back", hint: "Company / event name" },
+  { id: "upper_back", label: "Back Centre", hint: "Company / event name" },
   { id: "left_sleeve", label: "Left Sleeve", hint: "Secondary logo / partner logo" },
   { id: "right_sleeve", label: "Right Sleeve", hint: "Secondary logo / partner logo" },
 ];
