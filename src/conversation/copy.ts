@@ -4,10 +4,7 @@
  */
 
 export const COPY = {
-  welcome:
-    "👋 Welcome to **Custom Teamwear** — bulk custom apparel for corporates, events, colleges & sports teams.\n" +
-    "Minimum order: **50 pieces**.\n\n" +
-    "Pick a quality tier to see products:",
+  welcome: "Pick a quality tier to see products:",
 
   greetingAsk:
     "Are you planning a bulk order or would you like to order a trial sample first?",

@@ -13,7 +13,7 @@
  * endpoint and to log.
  */
 
-export const BUILD_STAMP = "2026-10-18-ui-copy-and-order-flow-adjustments";
+export const BUILD_STAMP = "2026-10-19-update-tier-welcome-copy";
 
 export interface BuildInfo {
   buildStamp: string;
