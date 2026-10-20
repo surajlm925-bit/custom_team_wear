@@ -13,7 +13,7 @@
  * endpoint and to log.
  */
 
-export const BUILD_STAMP = "2026-10-20-catalog-downloads-and-admin-email-hardening";
+export const BUILD_STAMP = "2026-10-20-openai-gpt-image-flare-integration";
 
 export interface BuildInfo {
   buildStamp: string;

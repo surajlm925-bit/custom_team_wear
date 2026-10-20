@@ -5,6 +5,7 @@
 
 import { generateGeminiMockup } from "./geminiClient.js";
 import { generateOpenRouterMockup } from "./openrouterClient.js";
+import { generateOpenAiMockup } from "./openaiClient.js";
 import { getEnv } from "../config/env.js";
 
 export interface MockupGenerationInput {
@@ -26,8 +27,11 @@ export async function generateMockupImage(
   input: MockupGenerationInput,
 ): Promise<MockupGenerationResult> {
   const env = getEnv();
-  const provider = (env.MOCKUP_IMAGE_PROVIDER || "openrouter").toLowerCase();
+  const provider = (env.MOCKUP_IMAGE_PROVIDER || "openai").toLowerCase();
 
+  if (provider === "openai") {
+    return generateOpenAiMockup(input);
+  }
   if (provider === "openrouter") {
     return generateOpenRouterMockup(input);
   }

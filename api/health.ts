@@ -32,9 +32,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     adminEmails: (process.env.ADMIN_EMAILS ?? "cteamwear@gmail.com").split(",").map((s) => s.trim()).filter(Boolean),
     adminEmailFrom: process.env.ADMIN_EMAIL_FROM ?? "Custom Teamwear <onboarding@resend.dev>",
     hasAdminPortalSecret: Boolean(process.env.ADMIN_PORTAL_SECRET),
+    hasOpenAiApiKey: Boolean(process.env.OPENAI_API_KEY || process.env.OPENAI_API),
+    openAiPrefix: (process.env.OPENAI_API_KEY || process.env.OPENAI_API) ? `${(process.env.OPENAI_API_KEY || process.env.OPENAI_API)!.slice(0, 10)}...` : null,
     hasOpenRouterApiKey: Boolean(process.env.OPENROUTER_API_KEY),
     openRouterPrefix: process.env.OPENROUTER_API_KEY ? `${process.env.OPENROUTER_API_KEY.slice(0, 10)}...` : null,
     mockupImageProvider: process.env.MOCKUP_IMAGE_PROVIDER ?? null,
+    mockupImageModel: process.env.MOCKUP_IMAGE_MODEL ?? null,
   };
 
   if (req.query.test_resend === "1") {

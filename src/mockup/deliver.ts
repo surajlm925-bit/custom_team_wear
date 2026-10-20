@@ -10,6 +10,7 @@
  */
 
 import type { MockupView, OrderData } from "../shared/types.js";
+import { getEnv } from "../config/env.js";
 import { generateDeterministicMockups } from "./composite.js";
 import { generateAiMockups } from "./generateAi.js";
 import { isLegacyOrderWithoutCatalog, isMockupEligible } from "./garmentReference.js";
@@ -87,7 +88,8 @@ async function defaultCompositor(
   assignments: LogoAssignment[],
   logoBuffers: Buffer[],
 ): Promise<{ view: MockupView; buffer: Buffer; costUsd?: number }[]> {
-  const hasAiProvider = Boolean(process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY);
+  const env = getEnv();
+  const hasAiProvider = Boolean(env.OPENAI_API_KEY || env.OPENROUTER_API_KEY || env.GEMINI_API_KEY);
 
   if (hasAiProvider) {
     try {

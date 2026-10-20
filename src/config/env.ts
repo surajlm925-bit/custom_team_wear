@@ -63,6 +63,7 @@ export interface Env {
   SENTRY_DSN?: string;
   EMOVUR_CONNECTOR_ID?: string;
   OPENROUTER_API_KEY?: string;
+  OPENAI_API_KEY?: string;
   MOCKUP_IMAGE_MODEL?: string;
   GEMINI_API_KEY?: string;
   MOCKUP_IMAGE_PROVIDER?: string;
@@ -179,6 +180,7 @@ export function getEnv(): Env {
     SENTRY_DSN: optional("SENTRY_DSN"),
     EMOVUR_CONNECTOR_ID: optional("EMOVUR_CONNECTOR_ID"),
     OPENROUTER_API_KEY: optional("OPENROUTER_API_KEY"),
+    OPENAI_API_KEY: optional("OPENAI_API_KEY") ?? optional("OPENAI_API"),
     MOCKUP_IMAGE_MODEL: optional("MOCKUP_IMAGE_MODEL"),
     GEMINI_API_KEY: optional("GEMINI_API_KEY"),
     MOCKUP_IMAGE_PROVIDER: optional("MOCKUP_IMAGE_PROVIDER"),
@@ -189,4 +191,9 @@ export function getEnv(): Env {
     MOCKUP_FREE_PER_MONTH: optionalPositiveInt("MOCKUP_FREE_PER_MONTH", DEFAULT_MOCKUP_FREE_PER_MONTH),
   };
   return cached;
+}
+
+/** Test seam: clears cached env so process.env overrides take effect. */
+export function __resetEnvForTests(): void {
+  cached = undefined;
 }
