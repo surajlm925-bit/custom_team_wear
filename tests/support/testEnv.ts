@@ -3,7 +3,7 @@
  * before any app module that calls getEnv() at first-use is invoked.
  * Import this at the TOP of any test that transitively touches getEnv()
  * (quota, env-derived pricing, etc). Values are throwaway test doubles —
- * no real Upstash/Telegram/Sheets access happens because Redis is faked
+ * no real Upstash/Meta/Sheets access happens because Redis is faked
  * and the AI provider / blob uploader are injected.
  */
 
@@ -29,5 +29,20 @@ const DEFAULTS: Record<string, string> = {
 for (const [k, v] of Object.entries(DEFAULTS)) {
   if (!process.env[k]) process.env[k] = v;
 }
+
+// In unit tests, avoid outbound network calls to Meta Graph API
+const originalFetch = globalThis.fetch;
+globalThis.fetch = (async (...args: Parameters<typeof fetch>) => {
+  const input = args[0];
+  const urlStr =
+    typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as { url: string }).url;
+  if (urlStr.includes("graph.facebook.com")) {
+    return new Response(JSON.stringify({ messages: [{ id: "mock_wamid_test" }] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  return originalFetch(...args);
+}) as typeof fetch;
 
 export {};

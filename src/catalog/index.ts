@@ -174,3 +174,6 @@ export function variantHasDistinctImage(item: CatalogItem, variant: CatalogVaria
   if (!variant.image.localPath) return false;
   return variant.image.localPath !== item.previewImage.localPath;
 }
+
+export * from "./downloads.js";
+

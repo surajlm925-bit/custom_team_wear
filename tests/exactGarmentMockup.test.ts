@@ -100,7 +100,7 @@ test("legacy order (no catalog data) is treated as legacy and is mockup-eligible
 
 test("the white shirt template (bytes) is what reaches the AI provider", async () => {
   const order = baseOrder();
-  const whiteShirtTemplate = fs.readFileSync(path.join(TEMPLATES_DIR, "polo_white.png"));
+  const whiteShirtTemplate = fs.readFileSync(path.join(TEMPLATES_DIR, "polo_front.png"));
 
   const { provider, calls } = captureProvider();
   const assignments: LogoAssignment[] = [{ logoIndex: 0, placement: "left_chest" }];

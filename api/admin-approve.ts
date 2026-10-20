@@ -66,11 +66,18 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
   if (action === "resend_otp") {
     const resend = await resendApprovalCode("order", orderId);
     if (resend.ok && resend.code) {
-      await sendSecondaryOtpEmail(orderId, resend.code, getPortalUrl(orderId, token));
-      banner = {
-        type: "success",
-        message: "✅ A fresh 6-digit verification code has been dispatched to your email! Please check your inbox and enter it below.",
-      };
+      const emailRes = await sendSecondaryOtpEmail(orderId, resend.code, getPortalUrl(orderId, token));
+      if (!emailRes.ok) {
+        banner = {
+          type: "warning",
+          message: `⚠️ Verification code generated [ ${resend.code} ], but email delivery failed: ${emailRes.error}. (Note: Resend test mode only delivers to the registered account email).`,
+        };
+      } else {
+        banner = {
+          type: "success",
+          message: "✅ A fresh 6-digit verification code has been dispatched to your email! Please check your inbox and enter it below.",
+        };
+      }
     } else {
       banner = {
         type: "info",
@@ -119,7 +126,13 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
     }
 
     const portalUrl = getPortalUrl(orderId, token);
-    await sendSecondaryOtpEmail(orderId, resend.code!, portalUrl);
+    const emailRes = await sendSecondaryOtpEmail(orderId, resend.code!, portalUrl);
+    if (!emailRes.ok) {
+      return res.status(502).json({
+        ok: false,
+        error: `Code generated, but email delivery failed: ${emailRes.error}`,
+      });
+    }
 
     return res.status(200).json({
       ok: true,
@@ -603,7 +616,7 @@ function renderPortalHtml(props: PortalRenderProps): string {
             </td>
           </tr>
           <tr>
-            <td class="label">Garment Tier</td>
+            <td class="label">T-Shirt Tier</td>
             <td class="val">
               ${order?.qty || 0} pcs · ${order?.tier || "Standard"}
               ${order?.catalogItemName ? `(${order.catalogItemName})` : ""}
@@ -618,7 +631,7 @@ function renderPortalHtml(props: PortalRenderProps): string {
             <td class="val">${order?.printMethod || "Standard"}</td>
           </tr>
           <tr>
-            <td class="label">Garment Total</td>
+            <td class="label">T-Shirt Total</td>
             <td class="val">₹${(order?.garmentTotal || 0).toLocaleString("en-IN")} (@ ₹${order?.garmentRate || 0}/pc)</td>
           </tr>
           <tr>

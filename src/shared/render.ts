@@ -58,7 +58,7 @@ function timelineLabel(order: OrderData): string {
 /** Renders the customer-facing quote card (S10). */
 export function renderQuoteCard(order: OrderData): string {
   const product = getProduct(order.productId);
-  const printMethod = getPrintMethod(order.printMethod);
+  const printMethod = order.printMethod ? getPrintMethod(order.printMethod) : undefined;
   const productLabel = product.label[order.tier];
   const tierLabel = TIER_LABELS[order.tier];
   const isSample = order.orderType === "sample";
@@ -71,9 +71,9 @@ export function renderQuoteCard(order: OrderData): string {
     catalogSelectionLine(order),
     "─────────────────────",
     isSample
-      ? `👕 Garments (3 pcs Sample Kit · Plain): *${formatRupees(order.garmentTotal)}*`
-      : `👕 Garment: ${order.qty} × ${formatRupees(order.garmentRate)} = *${formatRupees(order.garmentTotal)}*`,
-    isSample
+      ? `👕 T-Shirts (3 pcs Sample Kit · Plain): *${formatRupees(order.garmentTotal)}*`
+      : `👕 T-Shirt: ${order.qty} × ${formatRupees(order.garmentRate)} = *${formatRupees(order.garmentTotal)}*`,
+    isSample || !printMethod
       ? ""
       : `🖼 Printing (${printMethod.label}): ${order.qty} × ₹${printMethod.range[0]}–${printMethod.range[1]} = *${formatRupees(order.printEstLow)} – ${formatRupees(order.printEstHigh)}*`,
     isSample
@@ -86,10 +86,10 @@ export function renderQuoteCard(order: OrderData): string {
     "",
     isSample
       ? `💳 *Pay today (100% full payment): ${formatRupees(order.advanceDue)}*`
-      : `💳 *Pay today (garment advance ≈ 50%): ${formatRupees(order.advanceDue)}*`,
+      : `💳 *Pay today (T-Shirt advance ≈ 50%): ${formatRupees(order.advanceDue)}*`,
     isSample
       ? "Sample kit will be dispatched to your delivery address once payment is verified."
-      : "Remaining garment balance + printing + GST invoiced after artwork approval — before production begins. *No hidden charges.*",
+      : "Remaining T-Shirt balance + printing + GST invoiced after artwork approval — before production begins. *No hidden charges.*",
   ].filter((l) => l !== "");
   return lines.join("\n");
 }
@@ -109,10 +109,10 @@ export function renderAdminCard(order: OrderData): string {
     `Sizes: ${sizeSplitLine(order)}`,
     isSample
       ? `Timeline: ${timelineLabel(order)} · City: ${order.city}`
-      : `Print: ${getPrintMethod(order.printMethod).label} · Placement: ${placementLabel(order)} · Timeline: ${timelineLabel(order)} · City: ${order.city}`,
+      : `Print: ${order.printMethod ? getPrintMethod(order.printMethod).label : "Plain"} · Placement: ${placementLabel(order)} · Timeline: ${timelineLabel(order)} · City: ${order.city}`,
     isSample
-      ? `Garment ${formatRupees(order.garmentTotal)} · Total (100%) *${formatRupees(order.advanceDue)}*`
-      : `Garment ${formatRupees(order.garmentTotal)} · Est. print ${formatRupees(order.printEstLow)}–${formatRupees(order.printEstHigh)} · Advance due (≈50%) *${formatRupees(order.advanceDue)}*`,
+      ? `T-Shirt ${formatRupees(order.garmentTotal)} · Total (100%) *${formatRupees(order.advanceDue)}*`
+      : `T-Shirt ${formatRupees(order.garmentTotal)} · Est. print ${formatRupees(order.printEstLow)}–${formatRupees(order.printEstHigh)} · Advance due (≈50%) *${formatRupees(order.advanceDue)}*`,
     `Customer: ${order.name} · ${order.phone} · ${order.customerChatId} · Logos: ${order.logos.length > 0 ? `${order.logos.length} received ✔` : "not provided"}`,
     "─────────────────",
   ].filter((l) => l !== "");

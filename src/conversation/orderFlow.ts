@@ -15,6 +15,7 @@ import {
   showsCallMe
 } from "../pricing/index.js";
 import { resolveProductId, getQualityOptions, getQualityOptionById } from "../catalog/options.js";
+import { findCatalogByQuery, CATALOG_DRIVE_FOLDER_URL } from "../catalog/downloads.js";
 import { nextOrderId } from "../session/orderId.js";
 import { triggerMockupDelivery } from "../mockup/deliverTrigger.js";
 import { peekUsage } from "../mockup/quota.js";
@@ -137,6 +138,25 @@ export async function handleWhatsAppMessage(chatId: string, message: any) {
     return;
   }
 
+  // 5. Global catalog inquiry command
+  if (
+    lowerInput === "catalog" ||
+    lowerInput === "catalogs" ||
+    lowerInput === "catalogue" ||
+    lowerInput === "catalogues" ||
+    lowerInput === "/catalog" ||
+    lowerInput === "/catalogs" ||
+    lowerInput === "view catalog" ||
+    lowerInput === "download catalog" ||
+    lowerInput === "download catalogs" ||
+    lowerInput === "order:catalogs" ||
+    lowerInput === "catalog:download"
+  ) {
+    await sendMessage(chatId, COPY.catalogsListMessage);
+    await promptNext(chatId, draft, false);
+    return;
+  }
+
   // Determine current step based on missing draft fields
   const step = determineStep(draft);
 
@@ -150,7 +170,7 @@ export async function handleWhatsAppMessage(chatId: string, message: any) {
   }
 }
 
-function determineStep(draft: OrderDraft): string {
+export function determineStep(draft: OrderDraft): string {
   if (!draft.orderType) return "orderType";
   if (!draft.garmentSilhouette) return "garmentSilhouette";
   
@@ -331,7 +351,33 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
         draft.orderType = "sample";
         await saveDraft(chatId, draft);
         await promptNext(chatId, draft);
+      } else if (
+        input === "order:catalogs" ||
+        input === "catalog:download" ||
+        lowerOrderType === "catalogs" ||
+        lowerOrderType === "catalog" ||
+        lowerOrderType === "catalogue" ||
+        lowerOrderType.includes("catalog") ||
+        lowerOrderType.includes("catalogue") ||
+        lowerOrderType.includes("pdf") ||
+        lowerOrderType.includes("download") ||
+        lowerOrderType === "3"
+      ) {
+        await sendMessage(chatId, COPY.catalogsListMessage);
+        await promptNext(chatId, draft, false);
       } else {
+        const specificCatalog = findCatalogByQuery(lowerOrderType);
+        if (specificCatalog) {
+          await sendMessage(
+            chatId,
+            `📄 *${specificCatalog.name} (${specificCatalog.tier} Tier)*\n\n` +
+            `Tap the link below to view/download:\n🔗 ${specificCatalog.viewUrl}\n\n` +
+            `📂 All Catalogs Folder:\n${CATALOG_DRIVE_FOLDER_URL}`
+          );
+          await promptNext(chatId, draft, false);
+          break;
+        }
+
         const isGreeting = ["hi", "hello", "hey", "hola", "start", "/start"].includes(lowerOrderType);
         await promptNext(chatId, draft, !isGreeting);
       }
@@ -663,8 +709,8 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
         const usage = await peekUsage(`wa:${chatId}`, { phone: draft.phone }).catch(() => undefined);
         const remaining = usage ? Math.max(0, usage.freeAllowance - usage.committedFreeThisMonth) : 3;
         const freeText = remaining > 0
-          ? `🎨 You have **${remaining} free mockup preview${remaining === 1 ? "" : "s"}** remaining this month. Generating your preview on the garment now — one moment…`
-          : `🎨 Generating your preview on the garment now — one moment…`;
+          ? `🎨 You have **${remaining} free mockup preview${remaining === 1 ? "" : "s"}** remaining this month. Generating your preview on the T-Shirt now — one moment…`
+          : `🎨 Generating your preview on the T-Shirt now — one moment…`;
         await sendMessage(chatId, freeText);
 
         // 2. Deliver the mockup
@@ -718,7 +764,8 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
     case "orderType":
       await sendMenu(chatId, COPY.greetingAsk, [
         { id: "order:bulk", title: "Bulk Order (50+)" },
-        { id: "order:sample", title: "Order Sample Kit" }
+        { id: "order:sample", title: "Order Sample Kit" },
+        { id: "order:catalogs", title: COPY.catalogsMenuTitle }
       ]);
       break;
     case "garmentSilhouette":
@@ -852,7 +899,7 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
       const usage = await peekUsage(`wa:${chatId}`, { phone: draft.phone }).catch(() => undefined);
       const remaining = usage ? Math.max(0, usage.freeAllowance - usage.committedFreeThisMonth) : 3;
       const promptText =
-        `📎 Got your logo! Want to see a **preview mockup** of it on your exact selected garment now?\n\n` +
+        `📎 Got your logo! Want to see a **preview mockup** of it on your exact selected T-Shirt now?\n\n` +
         `You have **${remaining} free mockup preview${remaining === 1 ? "" : "s"}** available this month.\n\n` +
         `Choose an option below:`;
       await sendMenu(chatId, promptText, [
@@ -893,7 +940,7 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
         catalogSelection: draft.catalogSelection,
         qty,
         sizeSplit: draft.sizeSplit as OrderData["sizeSplit"],
-        printMethod: draft.printMethod!,
+        printMethod: draft.printMethod ?? "screen_print",
         city: draft.city!,
         name: draft.name!,
         phone: draft.phone!,

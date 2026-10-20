@@ -42,11 +42,23 @@ export async function notifyAdmins(order: OrderData, screenshotUrlOrId: string):
     const emailRes = await sendAdminOrderAlertEmail(order, code, portalUrl, resendOtpUrl, publicUrl);
     if (!emailRes.ok) {
       console.warn(`[notifyAdmins] Resend email warning for ${order.orderId}:`, emailRes.error);
+      // Fallback: Notify admins on WhatsApp if email dispatch failed
+      await notifyAdminsText(
+        `⚠️ *Admin Approval Email Failed for Order ${order.orderId}*\n\n` +
+        `Reason: ${emailRes.error}\n\n` +
+        `🔐 *Approval Code:* \`${code}\` (Valid 30 mins)\n` +
+        `👉 *Web Portal:* ${portalUrl}`
+      ).catch(() => {});
     } else {
       console.log(`[notifyAdmins] Admin order alert email dispatched successfully for ${order.orderId}`);
     }
   } catch (emailErr) {
     console.error(`[notifyAdmins] Error sending order alert email for ${order.orderId}:`, emailErr);
+    await notifyAdminsText(
+      `⚠️ *Admin Approval Email Error for Order ${order.orderId}*\n\n` +
+      `🔐 *Approval Code:* \`${code}\` (Valid 30 mins)\n` +
+      `👉 *Web Portal:* ${portalUrl}`
+    ).catch(() => {});
   }
 }
 

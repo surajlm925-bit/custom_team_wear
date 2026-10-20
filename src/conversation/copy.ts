@@ -3,11 +3,17 @@
  * Owner-editable before launch; kept in one place for easy change control.
  */
 
+import { renderCatalogDownloadList } from "../catalog/downloads.js";
+
 export const COPY = {
   welcome: "Pick a quality tier to see products:",
 
   greetingAsk:
     "Are you planning a bulk order or would you like to order a trial sample first?",
+
+  catalogsMenuTitle: "📥 Download Catalogs",
+
+  catalogsListMessage: renderCatalogDownloadList(),
 
   garmentSilhouetteAsk: "Choose your T-shirt style:",
 
@@ -23,7 +29,7 @@ export const COPY = {
     "⚡ **Dry Fit Kit**: ₹1,999 total (all 3 shirts)\n" +
     "🌿 **Cotton Kit**: ₹2,499 total (all 3 shirts)",
 
-  brandingTypeAsk: "How would you like your branding done on the garment?",
+  brandingTypeAsk: "How would you like your branding done on the T-Shirt?",
 
   qtyAskSample: "How many trial sample pieces would you like? (1–5 pieces):",
 
@@ -37,7 +43,7 @@ export const COPY = {
   qtyAsk: "How many pieces do you need? Type the number below (e.g. 50, 100, 250):",
   qtyInvalid: "Please send a valid number of pieces (1–100,000).",
 
-  catalogProductAsk: "Select a garment & fabric type:",
+  catalogProductAsk: "Select a T-Shirt & fabric type:",
   catalogQualityAsk: "Select a quality / fabric option:",
   catalogGroupAsk: (kind: "brand" | "category") => (kind === "brand" ? "Which brand?" : "Which category?"),
   catalogNoGroups: "Sorry, we don't have a catalog set up for this tier yet — our team will help you directly. Please use /start to try another tier, or wait for our callback.",
@@ -70,12 +76,12 @@ export const COPY = {
   sizeSplitSurplus: (entered: number, qty: number, excess: number) =>
     `You've entered ${entered} of ${qty} — that's ${excess} too many. Which size should we reduce?`,
 
-  printAsk: "How should your branding be applied? *(per-piece printing, added to garment price)*",
+  printAsk: "How should your branding be applied? *(per-piece printing, added to T-Shirt price)*",
   printEcho: (label: string, low: number, high: number, hint: string) =>
     `Selected ${label} — ₹${low}–${high}/pc. ${hint}`,
 
   placementAsk:
-    "Where should this logo go on the garment?\n\n" +
+    "Where should this logo go on the T-Shirt?\n\n" +
     "1️⃣ Left Chest — Professional company logo\n" +
     "2️⃣ Centre Front — Large logo / design\n" +
     "3️⃣ Back Centre — Company / event name\n" +
@@ -102,7 +108,7 @@ export const COPY = {
         "Scan & pay with any UPI app 👇\n" +
         "✅ Paid? Send us a **screenshot** here.\n" +
         "⏱ Not now? Reply /start anytime — your quote details are safe."
-      : `Here's your secure UPI link for **exactly ${advanceDue}** — that's your **garment advance (about 50% of the garment value)**, amount pre-filled with your Order ID attached automatically.\n\n` +
+      : `Here's your secure UPI link for **exactly ${advanceDue}** — that's your **T-Shirt advance (about 50% of the T-Shirt value)**, amount pre-filled with your Order ID attached automatically.\n\n` +
         "Scan & pay with any UPI app 👇\n" +
         "✅ Paid? Send us a **screenshot** here.\n" +
         "⏱ Not now? Reply /start anytime — your quote details are safe.",
@@ -117,21 +123,21 @@ export const COPY = {
   busyReprompt: "⏳ Still working on your last message — one moment please.",
 
   mockupEtaNote:
-    "\n\n🎨 We're generating a preview mockup of your logo on the garment — it'll land here in a minute or two.",
+    "\n\n🎨 We're generating a preview mockup of your logo on the T-Shirt — it'll land here in a minute or two.",
 
   /** Offered immediately after logo upload, before the quote/payment step. */
   mockupOfferAsk:
-    "📎 Got your logo! Want to see a **preview mockup** of it on your exact selected garment now?\n\n" +
+    "📎 Got your logo! Want to see a **preview mockup** of it on your exact selected T-Shirt now?\n\n" +
     "Your first **3 mockups each month are free**. (Extra previews after that are ₹20 each, verified by our team.)",
 
-  mockupGeneratingNote: "🎨 Generating your preview on the exact garment you picked — one moment…",
+  mockupGeneratingNote: "🎨 Generating your preview on the exact T-Shirt you picked — one moment…",
 
   /** Sent with the deterministic proof so the customer knows it's the real print reference. */
   mockupProofCaption: (view: "front" | "back") =>
-    `🎨 Print proof — your logo on the exact selected garment (${view === "front" ? "front" : "back"}). This is the true placement; nothing about the shirt or logo is altered.`,
+    `🎨 Print proof — your logo on the exact selected T-Shirt (${view === "front" ? "front" : "back"}). This is the true placement; nothing about the shirt or logo is altered.`,
 
   mockupUnavailable:
-    "🎨 Heads up: we couldn't generate an automatic preview mockup for your exact selected garment this time. " +
+    "🎨 Heads up: we couldn't generate an automatic preview mockup for your exact selected T-Shirt this time. " +
     "No problem at all — our design team will prepare your artwork proof manually and share it with you before production. Your order is confirmed and moving ahead. 🙌",
 
   /** Paid mockup workflow — shown when the customer's free quota is used up. */

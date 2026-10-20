@@ -8,7 +8,9 @@ interface SendEmailPayload {
   to: string[];
   subject: string;
   html: string;
+  text?: string;
   from?: string;
+  reply_to?: string;
 }
 
 /**
@@ -41,6 +43,8 @@ export async function sendEmailWithResend(payload: SendEmailPayload): Promise<{ 
         to: payload.to,
         subject: payload.subject,
         html: payload.html,
+        ...(payload.text ? { text: payload.text } : {}),
+        reply_to: payload.reply_to || payload.to[0],
       }),
       signal: controller.signal,
     });
@@ -180,7 +184,7 @@ export async function sendAdminOrderAlertEmail(
             </td>
           </tr>
           <tr>
-            <td style="padding: 10px 16px; font-size: 13px; color: #64748b; border-bottom: 1px solid #f1f5f9;">Garment / Tier</td>
+            <td style="padding: 10px 16px; font-size: 13px; color: #64748b; border-bottom: 1px solid #f1f5f9;">T-Shirt / Tier</td>
             <td style="padding: 10px 16px; font-size: 14px; font-weight: 600; color: #0f172a; border-bottom: 1px solid #f1f5f9;">
               ${order.qty} pcs · ${order.tier} (${order.catalogItemName || "Custom"}, ${order.catalogColor || "Standard"})
             </td>
@@ -190,7 +194,7 @@ export async function sendAdminOrderAlertEmail(
             <td style="padding: 10px 16px; border-bottom: 1px solid #f1f5f9;">${sizesHtml}</td>
           </tr>
           <tr>
-            <td style="padding: 10px 16px; font-size: 13px; color: #64748b; border-bottom: 1px solid #f1f5f9;">Garment Total</td>
+            <td style="padding: 10px 16px; font-size: 13px; color: #64748b; border-bottom: 1px solid #f1f5f9;">T-Shirt Total</td>
             <td style="padding: 10px 16px; font-size: 14px; font-weight: 600; color: #0f172a; border-bottom: 1px solid #f1f5f9;">
               ₹${order.garmentTotal.toLocaleString("en-IN")} (@ ₹${order.garmentRate}/pc)
             </td>
@@ -236,10 +240,25 @@ export async function sendAdminOrderAlertEmail(
 </html>
   `;
 
+  const text =
+    `Custom Teamwear — New Bulk Order Alert\n\n` +
+    `Order ID: ${order.orderId}\n` +
+    `Approval OTP (Valid for 30 minutes): ${code}\n\n` +
+    `👉 Open Review & Approval Portal:\n${portalUrl}\n\n` +
+    `Customer: ${order.name} (${order.phone})\n` +
+    `City: ${order.city}\n` +
+    `Timeline: ${order.timeline}${order.timelineUrgent ? " (Urgent)" : ""}\n` +
+    `T-Shirt: ${order.qty} pcs · ${order.tier} (${order.catalogItemName || "Custom"}, ${order.catalogColor || "Standard"})\n` +
+    `T-Shirt Total: ₹${order.garmentTotal.toLocaleString("en-IN")} (@ ₹${order.garmentRate}/pc)\n` +
+    `Advance Due (50%): ₹${order.advanceDue.toLocaleString("en-IN")}\n\n` +
+    `Fail-safe Secondary OTP (Beyond 30 mins):\n${resendOtpUrl}\n` +
+    (screenshotUrl ? `Payment Screenshot: ${screenshotUrl}\n` : "");
+
   return sendEmailWithResend({
     to: recipients,
     subject,
     html,
+    text,
   });
 }
 
@@ -301,9 +320,16 @@ export async function sendSecondaryOtpEmail(
 </html>
   `;
 
+  const text =
+    `Custom Teamwear — Secondary Approval Code\n\n` +
+    `Order ID: ${orderId}\n` +
+    `Secondary OTP (Valid 30 mins): ${newCode}\n\n` +
+    `👉 Open Verification Portal:\n${portalUrl}\n`;
+
   return sendEmailWithResend({
     to: recipients,
     subject,
     html,
+    text,
   });
 }

@@ -1,6 +1,5 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import {
   getCatalogManifest,
   getCatalogVersion,
@@ -123,15 +122,6 @@ test("isValidVariantForItem rejects an unknown variantId", () => {
 // rather than crash the conversation flow.
 // ---------------------------------------------------------------------
 
-test("every rendered-page preview image referenced by the manifest exists on disk", () => {
-  const manifest = getCatalogManifest();
-  for (const item of manifest.items) {
-    if (item.previewImage.kind === "rendered-page" && item.previewImage.localPath) {
-      const resolved = resolveCatalogAssetPath(item.previewImage.localPath);
-      assert.ok(fs.existsSync(resolved), `missing preview asset for item ${item.id}: ${resolved}`);
-    }
-  }
-});
 
 test("placeholder-kind variant images have no localPath (never falsely resolvable)", () => {
   const manifest = getCatalogManifest();

@@ -215,7 +215,7 @@ export const PRINT_METHODS: PrintMethodEntry[] = [
     id: "none",
     label: "Plain (No Print)",
     range: [0, 0],
-    hint: "Plain blank sample garments.",
+    hint: "Plain blank sample T-shirts.",
   },
 ];
 
