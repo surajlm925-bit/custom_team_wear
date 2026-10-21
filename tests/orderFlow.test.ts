@@ -4,9 +4,10 @@ import assert from "node:assert/strict";
 import { FakeRedis } from "./support/fakeRedis.js";
 import { __setRedisForTests } from "../src/session/redisClient.js";
 import { handleWhatsAppMessage } from "../src/conversation/orderFlow.js";
-import { loadDraft } from "../src/session/draftStore.js";
+import { loadDraft, saveDraft } from "../src/session/draftStore.js";
 import { COPY } from "../src/conversation/copy.js";
 import { CATALOG_DRIVE_FOLDER_URL } from "../src/catalog/downloads.js";
+import type { OrderDraft } from "../src/conversation/draft.js";
 
 let redis: FakeRedis;
 let sentMessages: Array<{ to: string; type?: string; text?: { body: string }; interactive?: any }> = [];
@@ -299,3 +300,93 @@ test("back navigation rolls back to previous step", async () => {
   assert.equal(draft?.garmentSilhouette, undefined);
   assert.equal(draft?.orderType, "bulk");
 });
+
+test("qty, city, name, phone, and logoUpload steps include ⬅️ Back button", async () => {
+  // 1. Move to qty step
+  await handleWhatsAppMessage(CHAT, buttonReply("order:bulk", "Bulk Order (50+)"));
+  sentMessages = [];
+  await handleWhatsAppMessage(CHAT, buttonReply("garment:collar", "Collared Neck"));
+  
+  // Last message sent should be qty with 1 button: ⬅️ Back
+  let lastMsg = sentMessages[sentMessages.length - 1];
+  assert.equal(lastMsg.interactive?.type, "button");
+  assert.equal(lastMsg.interactive?.action?.buttons?.[0]?.reply?.id, "nav:back");
+
+  // 2. Move to city step
+  sentMessages = [];
+  await handleWhatsAppMessage(CHAT, textMsg("50"));
+  lastMsg = sentMessages[sentMessages.length - 1];
+  assert.equal(lastMsg.interactive?.type, "button");
+  assert.equal(lastMsg.interactive?.action?.buttons?.[0]?.reply?.id, "nav:back");
+
+  // 3. Move to name step
+  sentMessages = [];
+  await handleWhatsAppMessage(CHAT, textMsg("Mumbai"));
+  lastMsg = sentMessages[sentMessages.length - 1];
+  assert.equal(lastMsg.interactive?.type, "button");
+  assert.equal(lastMsg.interactive?.action?.buttons?.[0]?.reply?.id, "nav:back");
+
+  // 4. Move to phone step
+  sentMessages = [];
+  await handleWhatsAppMessage(CHAT, textMsg("Rohit"));
+  lastMsg = sentMessages[sentMessages.length - 1];
+  assert.equal(lastMsg.interactive?.type, "button");
+  assert.equal(lastMsg.interactive?.action?.buttons?.[0]?.reply?.id, "nav:back");
+});
+
+test("mockup:generate triggers payment request without Back button and blocks rollback", async () => {
+  // Fast forward draft to mockupDecision
+  const draft: OrderDraft = {
+    orderType: "bulk",
+    garmentSilhouette: "collar",
+    qty: 60,
+    city: "Mumbai",
+    name: "Suraj",
+    phone: "9876543210",
+    timeline: "standard",
+    tier: "standard",
+    fabric: "polyester",
+    productId: "dry_fit_polo",
+    qualityOptionId: "rec-dfp-finch-superia",
+    colorName: "White",
+    printMethod: "screen_print",
+    logos: [{ placement: "left_chest", fileId: "file_logo_1" }],
+    logoReceived: true,
+  };
+  await saveDraft(CHAT, draft);
+
+  sentMessages = [];
+  await handleWhatsAppMessage(CHAT, buttonReply("mockup:generate", "Generate my mockup"));
+
+  // Check that preview notification was sent
+  const genMsg = sentMessages.find((m) => m.text?.body?.includes("Generating your preview on the T-Shirt now"));
+  assert.ok(genMsg, "must send generating notice");
+
+  // Check that quote card was sent
+  const quoteMsg = sentMessages.find((m) => m.text?.body?.includes("Your Estimate"));
+  assert.ok(quoteMsg, "must send quote card");
+
+  // Check that static QR code was sent
+  const qrMsg = sentMessages.find((m) => (m as any).type === "image");
+  assert.ok(qrMsg, "must send payment QR image");
+
+  // Check that payment instruction message was sent
+  const payMsg = sentMessages.find((m) => m.text?.body?.includes("Thank you! You can make your payment"));
+  assert.ok(payMsg, "must send payment instructions");
+
+  // Verify that the payment screen has NO ⬅️ Back button
+  const payInteractive = sentMessages.find((m) => m.interactive?.action?.buttons?.some((b: any) => b.reply?.id === "nav:back" && m.interactive?.body?.text?.includes("Thank you! You can make your payment")));
+  assert.ok(!payInteractive, "payment screen must NOT contain a back button");
+
+  // Verify that trying to go back via text 'back' is blocked
+  sentMessages = [];
+  await handleWhatsAppMessage(CHAT, textMsg("back"));
+  const blockedMsg = sentMessages.find((m) => m.text?.body?.includes("You cannot go back from this step"));
+  assert.ok(blockedMsg, "must block rollback once mockup is generated");
+
+  // Draft must remain at payment step
+  const updatedDraft = await loadDraft(CHAT);
+  assert.equal(updatedDraft?.mockupDecision, "generate");
+  assert.equal(updatedDraft?.paymentScreenshotId, undefined);
+});
+

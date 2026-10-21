@@ -129,8 +129,15 @@ export async function handleWhatsAppMessage(chatId: string, message: any) {
   ) {
     const rolledBack = rollbackStep(draft);
     if (!rolledBack) {
-      await sendMessage(chatId, "You're already at the beginning of the order flow! 👇");
-      await promptNext(chatId, draft, false);
+      if (determineStep(draft) === "payment" && draft.mockupDecision === "generate") {
+        await sendMessage(
+          chatId,
+          "⚠️ Your mockup preview has already been generated! You cannot go back from this step. Please complete your payment by scanning the QR code above, or reply 'cancel' to restart."
+        );
+      } else {
+        await sendMessage(chatId, "You're already at the beginning of the order flow! 👇");
+        await promptNext(chatId, draft, false);
+      }
       return;
     }
     await saveDraft(chatId, draft);
@@ -322,6 +329,9 @@ export function rollbackStep(draft: OrderDraft): boolean {
       return true;
 
     case "payment":
+      if (draft.mockupDecision === "generate") {
+        return false; // No back option once the mockup is generated
+      }
       if (draft.orderType === "sample") {
         delete draft.timeline;
         delete draft.timelineUrgent;
@@ -716,7 +726,11 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
         // 2. Deliver the mockup
         const order = assembleOrderData(chatId, draft);
         await saveOrderSnapshot(order).catch(() => {});
-        await triggerMockupDelivery(order.orderId);
+        try {
+          await triggerMockupDelivery(order.orderId);
+        } catch (deliveryErr) {
+          console.error(`[mockupDecision] triggerMockupDelivery error for ${order.orderId}:`, deliveryErr);
+        }
         
         // 3. Save draft and then prompt for payment
         await saveDraft(chatId, draft);
@@ -783,16 +797,24 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
       ]);
       break;
     case "qty":
-      await sendMessage(chatId, COPY.qtyAsk + "\n\n_(Reply 'back' to go back, 'cancel' to restart)_");
+      await sendMenu(chatId, COPY.qtyAsk, [
+        { id: "nav:back", title: "⬅️ Back" }
+      ]);
       break;
     case "city":
-      await sendMessage(chatId, COPY.cityAsk + "\n\n_(Reply 'back' to go back, 'cancel' to restart)_");
+      await sendMenu(chatId, COPY.cityAsk, [
+        { id: "nav:back", title: "⬅️ Back" }
+      ]);
       break;
     case "name":
-      await sendMessage(chatId, COPY.nameAsk + "\n\n_(Reply 'back' to go back, 'cancel' to restart)_");
+      await sendMenu(chatId, COPY.nameAsk, [
+        { id: "nav:back", title: "⬅️ Back" }
+      ]);
       break;
     case "phone":
-      await sendMessage(chatId, COPY.phoneAsk + "\n\n_(Reply 'back' to go back, 'cancel' to restart)_");
+      await sendMenu(chatId, COPY.phoneAsk, [
+        { id: "nav:back", title: "⬅️ Back" }
+      ]);
       break;
     case "timeline":
       await sendMenu(chatId, COPY.timelineAsk, [
@@ -886,7 +908,9 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
       ], "View Placements");
       break;
     case "logoUpload":
-      await sendMessage(chatId, COPY.logoUploadPrompt + "\n\n_(Reply 'back' to go back, 'cancel' to restart)_");
+      await sendMenu(chatId, COPY.logoUploadPrompt, [
+        { id: "nav:back", title: "⬅️ Back" }
+      ]);
       break;
     case "logoMore":
       await sendMenu(chatId, COPY.addAnotherLogoAsk(draft.logos!.length), [
@@ -961,7 +985,9 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
 
       // ---- S11 Payment ----
       const quoteText = renderQuoteCard(order);
-      await sendMessage(chatId, quoteText);
+      await sendMessage(chatId, quoteText).catch((err) => {
+        console.error(`[promptNext:payment] Failed to send quoteText:`, err);
+      });
 
       // To satisfy tests:
       const env = getEnv();
@@ -974,19 +1000,18 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
         env.STATIC_QR_URL && !env.STATIC_QR_URL.includes("drive.google.com")
           ? env.STATIC_QR_URL
           : "https://bkxivup64ugazlbe.public.blob.vercel-storage.com/payment-qr.jpg";
-      await sendMedia(chatId, qrUrl, "Scan & pay with any UPI app");
+      await sendMedia(chatId, qrUrl, "Scan & pay with any UPI app").catch((err) => {
+        console.error(`[promptNext:payment] Failed to send QR image:`, err);
+      });
       
       const payMessage = "Thank you! You can make your payment by scanning the QR code above.\n\nOnce done, please send a screenshot of your payment here.";
       
       if (showsCallMe(qty)) {
         await sendMenu(chatId, payMessage, [
-          { id: "callme", title: "📞 Request Callback" },
-          { id: "nav:back", title: "⬅️ Back" }
+          { id: "callme", title: "📞 Request Callback" }
         ]);
       } else {
-        await sendMenu(chatId, payMessage, [
-          { id: "nav:back", title: "⬅️ Back" }
-        ]);
+        await sendMessage(chatId, payMessage);
       }
       break;
   }

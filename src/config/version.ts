@@ -13,7 +13,7 @@
  * endpoint and to log.
  */
 
-export const BUILD_STAMP = "2026-10-21-direct-openai-mockups";
+export const BUILD_STAMP = "2026-10-21-payment-step-restore-and-back-buttons";
 
 export interface BuildInfo {
   buildStamp: string;

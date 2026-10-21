@@ -122,7 +122,11 @@ test("rollbackStep rolls back bulk flow step by step", () => {
     mockupDecision: "generate",
   };
 
-  // 1. From payment (mockupDecision made) -> rollback to mockupDecision
+  // 1a. Once mockup is generated, rollback from payment is disallowed
+  assert.equal(rollbackStep(draft), false);
+
+  // 1b. If mockup was skipped, rollback to mockupDecision is allowed
+  draft.mockupDecision = "skip";
   assert.equal(rollbackStep(draft), true);
   assert.equal(draft.mockupDecision, undefined);
 
@@ -259,4 +263,36 @@ test("rollbackStep handles auto-skipped single-quality items correctly", () => {
   assert.equal(rollbackStep(draft), true);
   assert.equal(draft.fabric, undefined);
   assert.equal(draft.productId, undefined);
+});
+
+test("rollbackStep strictly blocks rollback from payment if mockup was generated", () => {
+  const draft: OrderDraft = {
+    orderType: "bulk",
+    garmentSilhouette: "collar",
+    qty: 100,
+    city: "Delhi",
+    name: "User",
+    phone: "9876543210",
+    timeline: "standard",
+    tier: "standard",
+    fabric: "polyester",
+    productId: "dry_fit_polo",
+    qualityOptionId: "rec-dfp-finch-superia",
+    colorName: "White",
+    printMethod: "screen_print",
+    logos: [{ placement: "left_chest", fileId: "logo_id" }],
+    logoReceived: true,
+    mockupDecision: "generate",
+  };
+
+  assert.equal(determineStep(draft), "payment");
+  assert.equal(rollbackStep(draft), false, "Must return false because mockup was generated");
+  // Draft fields must remain intact
+  assert.equal(draft.mockupDecision, "generate");
+
+  // But if mockup was skipped, rollback is permitted
+  draft.mockupDecision = "skip";
+  assert.equal(rollbackStep(draft), true, "Must permit rollback when mockup was skipped");
+  assert.equal(draft.mockupDecision, undefined);
+  assert.equal(determineStep(draft), "mockupDecision");
 });
