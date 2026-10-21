@@ -394,6 +394,16 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+server.on("error", (err: NodeJS.ErrnoException) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`\n❌ Error: Port ${PORT} is already in use.`);
+    console.error(`👉 Stop the existing process or use a different port:`);
+    console.error(`   $env:MOCKUP_UI_PORT="3457"; npm run mockup-ui\n`);
+    process.exit(1);
+  }
+  console.error("Server error:", err);
+});
+
 server.listen(PORT, () => {
   console.log(`=======================================================`);
   console.log(`✨ Custom Teamwear Mockup Studio UI Server running!`);
