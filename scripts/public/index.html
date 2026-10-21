@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Custom Teamwear — Mockup Studio Pro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090a0f;
+      --surface: #12141c;
+      --surface-border: #232736;
+      --surface-hover: #1a1e2b;
+      --accent: #ff6b00;
+      --accent-glow: rgba(255, 107, 0, 0.35);
+      --accent-blue: #3b82f6;
+      --accent-green: #10b981;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --text-dim: #6b7280;
+      --card-bg: rgba(18, 20, 28, 0.7);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --radius: 12px;
+      --font-display: 'Outfit', sans-serif;
+      --font-body: 'Inter', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      min-height: 100vh;
+      overflow-x: hidden;
+      line-height: 1.5;
+    }
+
+    /* Background Ambient Glow */
+    .bg-glow {
+      position: fixed;
+      top: -100px;
+      right: -100px;
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(255, 107, 0, 0.12) 0%, rgba(59, 130, 246, 0.04) 50%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Top Navigation Header */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(16px);
+      background: rgba(9, 10, 15, 0.85);
+      border-bottom: 1px solid var(--surface-border);
+      padding: 14px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--accent), #ff9900);
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      font-family: var(--font-display);
+      color: #000;
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
+
+    .brand h1 {
+      font-family: var(--font-display);
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .badge-branch {
+      background: rgba(255, 107, 0, 0.12);
+      border: 1px solid rgba(255, 107, 0, 0.3);
+      color: var(--accent);
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+    }
+
+    /* Main Grid Layout */
+    .app-container {
+      position: relative;
+      z-index: 10;
+      display: grid;
+      grid-template-columns: 440px 1fr;
+      gap: 24px;
+      padding: 24px;
+      max-width: 1700px;
+      margin: 0 auto;
+      height: calc(100vh - 65px);
+    }
+
+    /* Left Control Sidebar */
+    .controls-panel {
+      background: var(--card-bg);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius);
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+
+    .section-title {
+      font-family: var(--font-display);
+      font-size: 0.9rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-title span.number {
+      background: var(--surface-border);
+      color: var(--text);
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: inline-grid;
+      place-items: center;
+      font-size: 0.7rem;
+    }
+
+    /* Segmented Controls */
+    .segment-group {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 4px;
+      border-radius: 10px;
+      border: 1px solid var(--glass-border);
+    }
+
+    .segment-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .segment-btn:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .segment-btn.active {
+      background: var(--surface-hover);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    /* Quality / Style Dropdown */
+    select.select-custom {
+      width: 100%;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--surface-border);
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-family: var(--font-body);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    select.select-custom:focus {
+      border-color: var(--accent);
+    }
+
+    /* Color Swatch Picker */
+    .color-search-box {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      margin-bottom: 10px;
+      outline: none;
+    }
+
+    .color-search-box:focus {
+      border-color: var(--accent);
+    }
+
+    .color-swatches-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+      gap: 8px;
+      max-height: 180px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .color-chip {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+
+    .color-chip:hover {
+      border-color: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+    }
+
+    .color-chip.active {
+      border-color: var(--accent);
+      background: rgba(255, 107, 0, 0.08);
+      box-shadow: 0 0 10px var(--accent-glow);
+    }
+
+    .swatch-circle {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .color-label {
+      font-size: 0.72rem;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+
+    .color-hex-tag {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--text-dim);
+    }
+
+    /* Print Method Cards */
+    .print-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .print-card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      padding: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .print-card:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .print-card.active {
+      border-color: var(--accent);
+      background: rgba(255, 107, 0, 0.08);
+    }
+
+    .print-card-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .print-card-desc {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      line-height: 1.3;
+    }
+
+    /* Logo & Placement */
+    .placement-checkboxes {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .placement-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    .placement-item input[type="checkbox"] {
+      accent-color: var(--accent);
+      width: 16px;
+      height: 16px;
+    }
+
+    .logo-upload-zone {
+      border: 2px dashed var(--surface-border);
+      border-radius: 10px;
+      padding: 14px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s;
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .logo-upload-zone:hover {
+      border-color: var(--accent);
+    }
+
+    .preset-badges-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .preset-pill {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 6px;
+      padding: 6px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .preset-pill:hover, .preset-pill.active {
+      border-color: var(--accent);
+      color: var(--text);
+      background: rgba(255, 107, 0, 0.1);
+    }
+
+    /* Generate Button */
+    .btn-generate {
+      background: linear-gradient(135deg, var(--accent), #e65100);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 14px 20px;
+      font-size: 1rem;
+      font-weight: 700;
+      font-family: var(--font-display);
+      cursor: pointer;
+      box-shadow: 0 4px 16px var(--accent-glow);
+      transition: all 0.25s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .btn-generate:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(255, 107, 0, 0.5);
+    }
+
+    .btn-generate:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Right Preview Stage */
+    .stage-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .stage-header-tabs {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--card-bg);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius);
+      padding: 8px 16px;
+    }
+
+    .stage-tabs {
+      display: flex;
+      gap: 8px;
+    }
+
+    .stage-tab {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .stage-tab.active {
+      background: var(--surface-hover);
+      color: #fff;
+    }
+
+    .stage-viewport {
+      flex: 1;
+      background: var(--card-bg);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--surface-border);
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: auto;
+      padding: 20px;
+    }
+
+    .empty-state {
+      text-align: center;
+      max-width: 400px;
+      color: var(--text-muted);
+    }
+
+    .empty-state svg {
+      width: 64px;
+      height: 64px;
+      stroke: var(--text-dim);
+      margin-bottom: 12px;
+    }
+
+    /* Gallery Display for Generated Outputs */
+    .results-gallery {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      width: 100%;
+      height: 100%;
+    }
+
+    .result-card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+      transition: transform 0.3s;
+      max-height: 90%;
+    }
+
+    .result-card:hover {
+      transform: scale(1.01);
+    }
+
+    .result-card-header {
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--surface-border);
+      background: rgba(0, 0, 0, 0.3);
+    }
+
+    .result-card-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge-engine-ai {
+      background: rgba(59, 130, 246, 0.15);
+      color: var(--accent-blue);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.65rem;
+    }
+
+    .badge-engine-sharp {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--accent-green);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.65rem;
+    }
+
+    .result-image-container {
+      position: relative;
+      display: grid;
+      place-items: center;
+      background: #111;
+      max-height: 540px;
+      overflow: hidden;
+    }
+
+    .result-image-container img {
+      max-width: 100%;
+      max-height: 540px;
+      object-fit: contain;
+      display: block;
+    }
+
+    .result-card-footer {
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .btn-download {
+      background: var(--surface-border);
+      color: var(--text);
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.2s;
+    }
+
+    .btn-download:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    /* Live Prompt Inspector Box */
+    .prompt-inspector-box {
+      width: 100%;
+      height: 100%;
+      background: #08090d;
+      border: 1px solid var(--surface-border);
+      border-radius: 10px;
+      padding: 16px;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: #93c5fd;
+      line-height: 1.6;
+      overflow: auto;
+      white-space: pre-wrap;
+    }
+
+    /* Loading Overlay */
+    .loading-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(9, 10, 15, 0.85);
+      backdrop-filter: blur(12px);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 40;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid var(--surface-border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .loading-subtext {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-glow"></div>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-logo">CTW</div>
+      <div>
+        <h1>Custom Teamwear Studio</h1>
+      </div>
+      <div class="badge-branch">mockup-quality-improvement</div>
+    </div>
+    <div class="header-actions">
+      <div class="status-indicator">
+        <div class="status-dot"></div>
+        <span>Exact Codebase Engine Connected</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="app-container">
+    <!-- Left Configuration Panel -->
+    <aside class="controls-panel">
+      <!-- 1. Garment & Fabric -->
+      <section>
+        <div class="section-title"><span class="number">1</span> Garment Silhouette & Fabric</div>
+        <div class="segment-group" id="garment-group">
+          <button type="button" class="segment-btn active" data-val="collar">Polo Shirt</button>
+          <button type="button" class="segment-btn" data-val="round_neck">Round Neck</button>
+        </div>
+        <div style="height: 10px;"></div>
+        <div class="segment-group" id="fabric-group">
+          <button type="button" class="segment-btn active" data-val="cotton">100% Cotton</button>
+          <button type="button" class="segment-btn" data-val="polyester">Polyester / Dry Fit</button>
+        </div>
+        <div style="height: 12px;"></div>
+        <label style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 4px; display: block;">Catalog Quality / Style</label>
+        <select class="select-custom" id="quality-select"></select>
+      </section>
+
+      <!-- 2. Color Selection with Vision Hex Swatches -->
+      <section>
+        <div class="section-title">
+          <span class="number">2</span> Color Palette
+          <span id="active-hex-badge" style="margin-left: auto; font-family: var(--font-mono); font-size: 0.75rem; color: var(--accent);">#202335</span>
+        </div>
+        <input type="text" class="color-search-box" id="color-search" placeholder="Search catalog color (e.g. Navy, Rama, Mustard)...">
+        <div class="color-swatches-grid" id="color-swatches"></div>
+      </section>
+
+      <!-- 3. Printing Technique -->
+      <section>
+        <div class="section-title"><span class="number">3</span> Printing Technique</div>
+        <div class="print-grid" id="print-methods-grid"></div>
+      </section>
+
+      <!-- 4. Logo Placement & Graphic -->
+      <section>
+        <div class="section-title"><span class="number">4</span> Logo & Placement</div>
+        <div class="placement-checkboxes" id="placements-list"></div>
+        <div style="height: 12px;"></div>
+        <label style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 4px; display: block;">Artwork Graphic</label>
+        <div class="preset-badges-row">
+          <div class="preset-pill active" data-preset="titans">Titans FC (Badge)</div>
+          <div class="preset-pill" data-preset="shield">CTW Shield (Crest)</div>
+          <div class="preset-pill" data-preset="minimal">Custom Minimal</div>
+        </div>
+        <div style="height: 8px;"></div>
+        <div class="logo-upload-zone" id="upload-zone">
+          <input type="file" id="logo-file-input" accept="image/png, image/jpeg, image/webp" style="display: none;">
+          <div id="upload-label" style="font-size: 0.8rem; color: var(--text-muted);">
+            📁 Drag & drop custom logo file, or click to browse
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. Engine Mode -->
+      <section>
+        <div class="section-title"><span class="number">5</span> Engine Mode</div>
+        <div class="segment-group" id="mode-group">
+          <button type="button" class="segment-btn active" data-val="ai">AI Photorealistic</button>
+          <button type="button" class="segment-btn" data-val="deterministic">Sharp Proof</button>
+          <button type="button" class="segment-btn" data-val="both">Both (Split)</button>
+        </div>
+      </section>
+
+      <!-- Generate Action -->
+      <button type="button" class="btn-generate" id="btn-generate">
+        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+        Generate Studio Mockup
+      </button>
+    </aside>
+
+    <!-- Right Presentation Stage -->
+    <section class="stage-panel">
+      <!-- Tabs Bar -->
+      <div class="stage-header-tabs">
+        <div class="stage-tabs">
+          <button type="button" class="stage-tab active" data-stage="render">Render Stage</button>
+          <button type="button" class="stage-tab" data-stage="prompt">Prompt Inspector (Exact AI Directive)</button>
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-muted);" id="meta-summary">
+          Lighting: 5500K 3-Point Softbox · Prime 85mm f/8
+        </div>
+      </div>
+
+      <!-- Stage Viewport -->
+      <div class="stage-viewport" id="viewport">
+        <!-- Loading State -->
+        <div class="loading-overlay" id="loading-overlay">
+          <div class="spinner"></div>
+          <div class="loading-text">Rendering Studio Product Mockup...</div>
+          <div class="loading-subtext" id="loading-step-desc">Generating 3-point studio lighting & fabric micro-weave...</div>
+        </div>
+
+        <!-- Empty Initial State -->
+        <div class="empty-state" id="empty-state">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <h3 style="font-family: var(--font-display); font-size: 1.1rem; color: #fff; margin-bottom: 6px;">Ready to Generate</h3>
+          <p style="font-size: 0.85rem;">Select your garment, pick an authentic vision-extracted catalog color, and click <strong>Generate Studio Mockup</strong>.</p>
+        </div>
+
+        <!-- Results Gallery -->
+        <div class="results-gallery" id="results-gallery" style="display: none;"></div>
+
+        <!-- Prompt Inspector Content -->
+        <div class="prompt-inspector-box" id="prompt-box" style="display: none;"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // State
+    const state = {
+      tier: 'basic',
+      garmentType: 'collar',
+      fabricType: 'cotton',
+      qualityId: '',
+      qualityName: '',
+      colorName: 'Navy Blue',
+      colorHex: '#202335',
+      printMethod: 'embroidery',
+      placements: ['left_chest'],
+      preset: 'titans',
+      customLogoDataUrl: null,
+      mode: 'ai',
+      config: null,
+    };
+
+    // DOM Elements
+    const qualitySelect = document.getElementById('quality-select');
+    const colorSwatchesGrid = document.getElementById('color-swatches');
+    const colorSearch = document.getElementById('color-search');
+    const printMethodsGrid = document.getElementById('print-methods-grid');
+    const placementsList = document.getElementById('placements-list');
+    const btnGenerate = document.getElementById('btn-generate');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const emptyState = document.getElementById('empty-state');
+    const resultsGallery = document.getElementById('results-gallery');
+    const promptBox = document.getElementById('prompt-box');
+    const activeHexBadge = document.getElementById('active-hex-badge');
+    const uploadZone = document.getElementById('upload-zone');
+    const logoFileInput = document.getElementById('logo-file-input');
+    const uploadLabel = document.getElementById('upload-label');
+
+    // Fetch initial options directly from codebase API
+    async function init() {
+      try {
+        const res = await fetch('/api/options');
+        state.config = await res.json();
+        renderQualityOptions();
+        renderColors(state.config.colors);
+        renderPrintMethods(state.config.printMethods);
+        renderPlacements(state.config.placements);
+        updatePromptPreview();
+      } catch (err) {
+        console.error('Failed to load options', err);
+      }
+    }
+
+    function renderQualityOptions() {
+      const prodKey = state.garmentType === 'collar'
+        ? (state.fabricType === 'cotton' ? 'cotton_polo' : 'dry_fit_polo')
+        : (state.fabricType === 'cotton' ? 'cotton_round_neck' : 'dry_fit_round_neck');
+
+      const qualities = state.config.catalogOptions[state.tier]?.[prodKey] || [];
+      qualitySelect.innerHTML = qualities.map((q, idx) => `
+        <option value="${q.id}" ${idx === 0 ? 'selected' : ''}>${q.name} (${q.colors.length} colors)</option>
+      `).join('');
+
+      if (qualities.length > 0) {
+        state.qualityId = qualities[0].id;
+        state.qualityName = qualities[0].name;
+      }
+    }
+
+    function renderColors(colorsList) {
+      colorSwatchesGrid.innerHTML = colorsList.map(c => `
+        <div class="color-chip ${c.name === state.colorName ? 'active' : ''}" data-name="${c.name}" data-hex="${c.hex}">
+          <div class="swatch-circle" style="background-color: ${c.hex};"></div>
+          <div class="color-label" title="${c.name}">${c.name}</div>
+          <div class="color-hex-tag">${c.hex}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderPrintMethods(methods) {
+      printMethodsGrid.innerHTML = methods.map(m => `
+        <div class="print-card ${m.id === state.printMethod ? 'active' : ''}" data-id="${m.id}">
+          <div class="print-card-title">${m.label}</div>
+          <div class="print-card-desc">${m.desc}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderPlacements(placements) {
+      placementsList.innerHTML = placements.map(p => `
+        <label class="placement-item">
+          <span>${p.label} <small style="color: var(--text-dim);">(${p.view} view)</small></span>
+          <input type="checkbox" value="${p.id}" ${state.placements.includes(p.id) ? 'checked' : ''}>
+        </label>
+      `).join('');
+    }
+
+    // Live Prompt Preview
+    async function updatePromptPreview() {
+      try {
+        const res = await fetch('/api/preview-prompt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tier: state.tier,
+            garmentType: state.garmentType,
+            fabricType: state.fabricType,
+            qualityId: state.qualityId,
+            qualityName: state.qualityName,
+            colorName: state.colorName,
+            printMethod: state.printMethod,
+            placements: state.placements,
+          })
+        });
+        const data = await res.json();
+        promptBox.innerText = `=== FRONT VIEW PROMPT (SENT TO OPENAI) ===\n\n${data.frontPrompt}\n\n===========================================\n=== BACK VIEW PROMPT ===\n\n${data.backPrompt}`;
+      } catch (err) {
+        console.error('Failed to preview prompt', err);
+      }
+    }
+
+    // Event Listeners for Garment & Fabric
+    document.getElementById('garment-group').addEventListener('click', (e) => {
+      const btn = e.target.closest('.segment-btn');
+      if (!btn) return;
+      document.querySelectorAll('#garment-group .segment-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.garmentType = btn.dataset.val;
+      renderQualityOptions();
+      updatePromptPreview();
+    });
+
+    document.getElementById('fabric-group').addEventListener('click', (e) => {
+      const btn = e.target.closest('.segment-btn');
+      if (!btn) return;
+      document.querySelectorAll('#fabric-group .segment-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.fabricType = btn.dataset.val;
+      renderQualityOptions();
+      updatePromptPreview();
+    });
+
+    qualitySelect.addEventListener('change', (e) => {
+      state.qualityId = e.target.value;
+      state.qualityName = e.target.options[e.target.selectedIndex].text;
+      updatePromptPreview();
+    });
+
+    // Color Swatch Clicks
+    colorSwatchesGrid.addEventListener('click', (e) => {
+      const chip = e.target.closest('.color-chip');
+      if (!chip) return;
+      document.querySelectorAll('.color-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      state.colorName = chip.dataset.name;
+      state.colorHex = chip.dataset.hex;
+      activeHexBadge.innerText = chip.dataset.hex;
+      activeHexBadge.style.color = chip.dataset.hex === '#FFFFFF' ? '#999' : chip.dataset.hex;
+      updatePromptPreview();
+    });
+
+    // Color Search Filter
+    colorSearch.addEventListener('input', (e) => {
+      const q = e.target.value.toLowerCase().trim();
+      const filtered = state.config.colors.filter(c => c.name.toLowerCase().includes(q) || c.hex.toLowerCase().includes(q));
+      renderColors(filtered);
+    });
+
+    // Print Method Clicks
+    printMethodsGrid.addEventListener('click', (e) => {
+      const card = e.target.closest('.print-card');
+      if (!card) return;
+      document.querySelectorAll('.print-card').forEach(c => c.classList.remove('active'));
+      card.classList.add('active');
+      state.printMethod = card.dataset.id;
+      updatePromptPreview();
+    });
+
+    // Placements Checkbox change
+    placementsList.addEventListener('change', () => {
+      const checked = Array.from(placementsList.querySelectorAll('input[type="checkbox"]:checked')).map(i => i.value);
+      state.placements = checked.length > 0 ? checked : ['left_chest'];
+      updatePromptPreview();
+    });
+
+    // Preset Badges
+    document.querySelector('.preset-badges-row').addEventListener('click', (e) => {
+      const pill = e.target.closest('.preset-pill');
+      if (!pill) return;
+      document.querySelectorAll('.preset-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      state.preset = pill.dataset.preset;
+      state.customLogoDataUrl = null;
+      uploadLabel.innerText = '📁 Drag & drop custom logo file, or click to browse';
+    });
+
+    // Logo Upload Handling
+    uploadZone.addEventListener('click', () => logoFileInput.click());
+    logoFileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        state.customLogoDataUrl = evt.target.result;
+        uploadLabel.innerText = `✓ Loaded: ${file.name}`;
+        document.querySelectorAll('.preset-pill').forEach(p => p.classList.remove('active'));
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Engine Mode Clicks
+    document.getElementById('mode-group').addEventListener('click', (e) => {
+      const btn = e.target.closest('.segment-btn');
+      if (!btn) return;
+      document.querySelectorAll('#mode-group .segment-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.mode = btn.dataset.val;
+    });
+
+    // Stage Tabs
+    document.querySelectorAll('.stage-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.stage-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        if (tab.dataset.stage === 'render') {
+          promptBox.style.display = 'none';
+          if (resultsGallery.innerHTML.trim() !== '') {
+            resultsGallery.style.display = 'flex';
+            emptyState.style.display = 'none';
+          } else {
+            emptyState.style.display = 'block';
+          }
+        } else {
+          resultsGallery.style.display = 'none';
+          emptyState.style.display = 'none';
+          promptBox.style.display = 'block';
+        }
+      });
+    });
+
+    // Generate Action
+    btnGenerate.addEventListener('click', async () => {
+      btnGenerate.disabled = true;
+      loadingOverlay.style.display = 'flex';
+      emptyState.style.display = 'none';
+
+      // Switch to render tab if on prompt tab
+      document.querySelector('.stage-tab[data-stage="render"]').click();
+
+      try {
+        const payload = {
+          mode: state.mode,
+          garmentType: state.garmentType,
+          fabricType: state.fabricType,
+          tier: state.tier,
+          qualityId: state.qualityId,
+          qualityName: state.qualityName,
+          colorName: state.colorName,
+          printMethod: state.printMethod,
+          placements: state.placements,
+          preset: state.preset,
+          logos: state.customLogoDataUrl ? [{ dataUrl: state.customLogoDataUrl }] : [],
+        };
+
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.error || 'Generation failed');
+        }
+
+        renderResults(data);
+      } catch (err) {
+        alert('Generation failed: ' + err.message);
+      } finally {
+        loadingOverlay.style.display = 'none';
+        btnGenerate.disabled = false;
+      }
+    });
+
+    function renderResults(data) {
+      resultsGallery.style.display = 'flex';
+      resultsGallery.innerHTML = data.results.map((r, idx) => `
+        <div class="result-card">
+          <div class="result-card-header">
+            <div class="result-card-title">
+              <span>${r.view} View</span>
+              <span class="${r.engine === 'ai' ? 'badge-engine-ai' : 'badge-engine-sharp'}">
+                ${r.engine === 'ai' ? 'AI Photorealistic' : 'Sharp Proof'}
+              </span>
+            </div>
+            <span style="font-size: 0.75rem; color: var(--text-dim);">${(data.durationMs / 1000).toFixed(1)}s</span>
+          </div>
+          <div class="result-image-container">
+            <img src="${r.dataUrl}" alt="Mockup ${r.view}">
+          </div>
+          <div class="result-card-footer">
+            <span style="font-size: 0.75rem; color: var(--text-muted);">
+              ${state.colorName} (${data.colorHex ? '#' + data.colorHex : ''})
+            </span>
+            <a href="${r.dataUrl}" download="mockup_${state.colorName}_${r.view}_${r.engine}.png" class="btn-download">
+              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Download PNG
+            </a>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Initialize
+    init();
+  </script>
+</body>
+</html>
