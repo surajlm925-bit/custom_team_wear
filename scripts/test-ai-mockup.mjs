@@ -36,18 +36,18 @@ const logoPath = process.argv[2];
 const placement = process.argv[3] || "left_chest";
 const product = process.argv[4] || "cotton_polo";
 const color = process.argv[5] || "Navy Blue";
-const provider = (process.env.MOCKUP_IMAGE_PROVIDER || "openrouter").toLowerCase();
+const provider = (process.env.MOCKUP_IMAGE_PROVIDER || "openai").toLowerCase();
 
 if (!logoPath) {
   console.error("Usage: node scripts/test-ai-mockup.mjs <path-to-logo-image> [placement] [product] [color]");
   process.exit(1);
 }
-if (provider === "gemini" && !process.env.GEMINI_API_KEY) {
-  console.error("Missing GEMINI_API_KEY in environment.");
+if (provider === "openai" && !process.env.OPENAI_API_KEY) {
+  console.error("Missing OPENAI_API_KEY in environment.");
   process.exit(1);
 }
-if (provider === "openrouter" && !process.env.OPENROUTER_API_KEY) {
-  console.error("Missing OPENROUTER_API_KEY in environment.");
+if (provider === "gemini" && !process.env.GEMINI_API_KEY) {
+  console.error("Missing GEMINI_API_KEY in environment.");
   process.exit(1);
 }
 
@@ -56,7 +56,7 @@ const { generateAiMockups } = await import("../src/mockup/generateAi.ts");
 const logoBuffer = await readFile(path.resolve(logoPath));
 
 console.log(`Generating mockup: product=${product} color=${color} placement=${placement} logo=${logoPath} provider=${provider}`);
-console.log(provider === "gemini" ? "Calling Gemini (free tier)..." : "Calling OpenRouter... (this costs real credits)");
+console.log(provider === "gemini" ? "Calling Gemini..." : `Calling OpenAI direct API (${process.env.MOCKUP_IMAGE_MODEL || "gpt-image-2.5-flare-2026-09-08"})...`);
 
 const order = {
   orderId: "CTW-TEST-AI",
