@@ -115,8 +115,8 @@ export function buildMockupPrompt(
             ? "Dye-sublimation: ink fully infused into the garment fibers with zero edge thickness, flawlessly taking on all highlights, shadows, and cloth texture of the garment."
             : "Professional garment print: physically printed onto the textile, adopting the fabric's natural weave, folds, lighting, and ambient shadows.";
 
-  // Sleeve-side-angle prompt: if any assignment is a sleeve placement, add side-angle view
-  const sleeveAssignments = assignments.filter(
+  // Sleeve-side-angle prompt: if any assignment on the current view is a sleeve placement, add side-angle view
+  const sleeveAssignments = relevant.filter(
     (a) => a.placement === "left_sleeve" || a.placement === "right_sleeve",
   );
   const sleeveSideAnglePrompt =
@@ -139,12 +139,16 @@ export function buildMockupPrompt(
     })
     .join("\n");
 
+  const colorPreservationLine = isWhiteColor
+    ? "- The shirt fabric must remain crisp, clean white as shown in Reference Image #1."
+    : `- The shirt fabric must be colored solid ${colorNameDisplay}${colorHex ? ` (hex #${colorHex})` : ""}, NOT white.`;
+
   const lines = [
     `GARMENT SPECIFICATION: Reference image #1 shows the exact ${garmentTypeWord}${styleClause} (${viewLabel}), exactly ${templateWidth}x${templateHeight} pixels.`,
     colorInstruction,
     `PRINTING SPECIFICATION: ${textureLanguage}`,
     sleeveSideAnglePrompt,
-    "TASK: Photorealistic garment mockup. Color the garment fabric as specified, and seamlessly print the logo(s) onto the fabric at the exact specified position(s).",
+    `TASK: Photorealistic garment mockup. Color the garment fabric to ${isWhiteColor ? "crisp white" : `${colorNameDisplay}${colorHex ? ` (hex #${colorHex})` : ""}`} as specified, and seamlessly print the logo(s) onto the fabric at the exact specified position(s).`,
     "PHYSICAL PRINT REALISM REQUIREMENTS:",
     "- Fabric Deformation: The printed logo must warp and deform naturally with the folds, creases, wrinkles, and curvature of the garment fabric beneath it.",
     "- Lighting & Shadows: The printed logo must receive the exact same ambient lighting, directional highlights, and shadow gradients present across that region of the shirt. It must not look like a flat sticker pasted on top; it must look physically printed on the garment.",
@@ -152,7 +156,7 @@ export function buildMockupPrompt(
     placementLines,
     "PRESERVATION RULES:",
     "- Preserve the exact garment cut, style, collar, seams, buttons, framing, and neutral background from Reference Image #1.",
-    `- The shirt fabric must be colored solid ${isWhiteColor ? "white" : `${colorNameDisplay}${colorHex ? ` (hex #${colorHex})` : ""}`}, NOT white.`,
+    colorPreservationLine,
     "- Reproduce the logo's exact colors, typography, and iconography without altering or simplifying the artwork.",
     "- Do not add any white square, background border, or canvas box behind the logo. If the logo reference has a rectangular background canvas, isolate and print only the logo insignia onto the garment.",
     `Output a single photorealistic photograph, exactly ${templateWidth}x${templateHeight} pixels.`,

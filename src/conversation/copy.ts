@@ -89,7 +89,9 @@ export const COPY = {
     "5️⃣ Right Sleeve — Secondary logo / partner logo\n\n" +
     "No artwork ready yet? Skip — our design team will help.",
   placementEcho: (label: string) => `📍 ${label} selected. Now upload the logo/design for this placement 📎`,
-  logoUploadPrompt: "Please send the logo/design image for this placement.",
+  logoUploadPrompt:
+    "Please send the logo/design image for this placement 📎\n\n" +
+    "💡 *Tip for best output:* A **1:1 square aspect ratio** (or circular/shield badge on a transparent PNG background) works best, especially for chest and sleeve placements. High-resolution PNG or JPEG is recommended.",
   addAnotherLogoAsk: (count: number) =>
     `Got it — ${count} logo${count === 1 ? "" : "s"} added. Want to add another logo at a different position?`,
 

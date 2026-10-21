@@ -13,7 +13,7 @@
  * endpoint and to log.
  */
 
-export const BUILD_STAMP = "2026-10-20-openai-gpt-image-flare-integration";
+export const BUILD_STAMP = "2026-10-21-left-chest-positioning-and-aspect-ratio-tip";
 
 export interface BuildInfo {
   buildStamp: string;

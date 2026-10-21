@@ -36,7 +36,7 @@ export function getZoneForPlacement(placement: LogoPlacement | "centre_front"): 
 }
 
 const ZONES: Record<LogoPlacement, ZoneRect> = {
-  left_chest: { x: 0.58, y: 0.22, width: 0.2, height: 0.13 },
+  left_chest: { x: 0.53, y: 0.23, width: 0.15, height: 0.15 },
   center_front: { x: 0.3, y: 0.25, width: 0.4, height: 0.3 },
   upper_back: { x: 0.25, y: 0.15, width: 0.5, height: 0.2 },
   // Left sleeve = wearer's left arm = image-right in a front-facing photo.
