@@ -1,10 +1,4 @@
-/**
- * Provider switch for AI mockup generation.
- * Uses Gemini standalone client.
- */
-
 import { generateGeminiMockup } from "./geminiClient.js";
-import { generateOpenRouterMockup } from "./openrouterClient.js";
 import { generateOpenAiMockup } from "./openaiClient.js";
 import { getEnv } from "../config/env.js";
 
@@ -29,11 +23,9 @@ export async function generateMockupImage(
   const env = getEnv();
   const provider = (env.MOCKUP_IMAGE_PROVIDER || "openai").toLowerCase();
 
-  if (provider === "openai") {
-    return generateOpenAiMockup(input);
+  if (provider === "gemini") {
+    return generateGeminiMockup(input);
   }
-  if (provider === "openrouter") {
-    return generateOpenRouterMockup(input);
-  }
-  return generateGeminiMockup(input);
+  // Default and direct provider is OpenAI (OpenRouter is explicitly not used)
+  return generateOpenAiMockup(input);
 }

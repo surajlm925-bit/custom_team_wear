@@ -34,10 +34,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     hasAdminPortalSecret: Boolean(process.env.ADMIN_PORTAL_SECRET),
     hasOpenAiApiKey: Boolean(process.env.OPENAI_API_KEY || process.env.OPENAI_API),
     openAiPrefix: (process.env.OPENAI_API_KEY || process.env.OPENAI_API) ? `${(process.env.OPENAI_API_KEY || process.env.OPENAI_API)!.slice(0, 10)}...` : null,
-    hasOpenRouterApiKey: Boolean(process.env.OPENROUTER_API_KEY),
-    openRouterPrefix: process.env.OPENROUTER_API_KEY ? `${process.env.OPENROUTER_API_KEY.slice(0, 10)}...` : null,
-    mockupImageProvider: process.env.MOCKUP_IMAGE_PROVIDER ?? null,
-    mockupImageModel: process.env.MOCKUP_IMAGE_MODEL ?? null,
+    mockupImageProvider: process.env.MOCKUP_IMAGE_PROVIDER ?? "openai",
+    mockupImageModel: process.env.MOCKUP_IMAGE_MODEL ?? "gpt-image-2.5-flare-2026-09-08",
   };
 
   if (req.query.test_resend === "1") {

@@ -79,7 +79,7 @@ async function defaultSendPhoto(
 
 /**
  * Default compositor for production:
- * If OPENROUTER_API_KEY or GEMINI_API_KEY is configured, produce photorealistic
+ * If OPENAI_API_KEY (direct) or GEMINI_API_KEY is configured, produce photorealistic
  * AI mockups via generateAiMockups. If AI generation fails or no key is set,
  * seamlessly fall back to deterministic Sharp compositing.
  */
@@ -89,7 +89,7 @@ async function defaultCompositor(
   logoBuffers: Buffer[],
 ): Promise<{ view: MockupView; buffer: Buffer; costUsd?: number }[]> {
   const env = getEnv();
-  const hasAiProvider = Boolean(env.OPENAI_API_KEY || env.OPENROUTER_API_KEY || env.GEMINI_API_KEY);
+  const hasAiProvider = Boolean(env.OPENAI_API_KEY || env.GEMINI_API_KEY);
 
   if (hasAiProvider) {
     try {
@@ -105,6 +105,9 @@ async function defaultCompositor(
         `[mockup/deliver] AI mockup generation failed for order ${order.orderId}, falling back to deterministic:`,
         aiErr,
       );
+      await notifyAdminsText(
+        `⚠️ AI mockup generation failed for order ${order.orderId} (falling back to deterministic proof):\n${(aiErr as Error)?.message || String(aiErr)}`,
+      ).catch(() => {});
     }
   }
 

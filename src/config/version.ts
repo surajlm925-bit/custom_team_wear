@@ -13,7 +13,7 @@
  * endpoint and to log.
  */
 
-export const BUILD_STAMP = "2026-10-21-left-chest-positioning-and-aspect-ratio-tip";
+export const BUILD_STAMP = "2026-10-21-direct-openai-mockups";
 
 export interface BuildInfo {
   buildStamp: string;
