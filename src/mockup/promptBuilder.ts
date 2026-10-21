@@ -39,7 +39,7 @@ const PLACEMENT_DESCRIPTIONS: Record<LogoPlacement, string> = {
 
 export const WHITE_TEMPLATE_DESC = "Reference image #1 is a white-base garment template; the garment colour will be set to the hex code specified in the prompt, and all other garment attributes are preserved from this white base.";
 
-const SLEEVE_SIDE_ANGLE_PROMPT = "Also generate a side-angle view showing the sleeve on the garment's side, with the front of the shirt visible alongside the sleeve, so both the sleeve placement and the garment's front are clearly visible.";
+const SLEEVE_INSTRUCTION = "SLEEVE PLACEMENT REQUIREMENT: The sleeve logo must be cleanly printed on the upper arm / bicep sleeve fabric as specified, conforming naturally to the sleeve curve and clearly visible in this studio view.";
 
 export interface LogoAssignment {
   /** Index into the caller's logo image array (0-based). */
@@ -64,6 +64,28 @@ function zoneToPixelBox(placement: LogoPlacement, templateWidth: number, templat
   const height = Math.round(zone.height * templateHeight);
   return { left, top, right: left + width, bottom: top + height, width, height };
 }
+
+function getFabricTextureDescription(garment?: GarmentDescriptor): string {
+  const isPolo = garment?.garmentType === "polo";
+  const label = (garment?.styleLabel ?? "").toLowerCase();
+  const isDryFit = label.includes("dry") || label.includes("poly") || label.includes("active") || label.includes("mars");
+
+  if (isDryFit) {
+    return "High-performance athletic micro-mesh polyester knit with subtle moisture-wicking weave micro-texture, gentle performance sheen, and crisp aerodynamic drape.";
+  }
+  if (isPolo) {
+    return "Premium honeycomb pique cotton weave with distinct waffle-knit micro-texture, structured ribbed knit collar, and authentic tactile cloth hand-feel.";
+  }
+  return "High-grade 100% combed ring-spun cotton jersey with fine textile weave, smooth natural matte finish, and realistic soft fabric drape folds.";
+}
+
+const STUDIO_LIGHTING_SPEC = [
+  "COMMERCIAL APPAREL STUDIO PHOTOGRAPHY & LIGHTING:",
+  "- Lighting: Professional high-end commercial apparel studio setup with 3-point softbox lighting. A large 45-degree key softbox provides soft, natural wrap-around illumination; a diffused fill light preserves rich tonal gradations in fabric folds without harsh shadows; a subtle rim kicker light provides crisp edge separation against the background.",
+  "- Color & White Balance: Daylight-balanced 5500K studio strobe illumination with neutral color fidelity, high CRI 98+, and zero color cast.",
+  "- Optics: Shot on a prime 85mm lens at f/8 aperture, ensuring tack-sharp clarity across the entire garment from collar to hem, with deep depth of field and zero optical distortion.",
+  "- Background & Environment: Clean, pristine commercial studio cyclorama background (neutral soft light grey / off-white infinity studio cove) with subtle, realistic contact shadow beneath the garment hem for grounded three-dimensionality.",
+].join("\n");
 
 /**
  * Builds the prompt for a single template view (front or back), given
@@ -90,17 +112,17 @@ export function buildMockupPrompt(
 
   // Describe the exact garment the customer selected so the model
   // preserves brand/style/colour rather than drifting to a generic tee.
-  // Deliberately phrased as "keep it exactly as shown" — this is a
-  // preservation instruction, not a restyle instruction.
   const garmentTypeWord = garment?.garmentType === "polo" ? "polo shirt" : "round-neck t-shirt";
   const styleClause = garment?.styleLabel ? ` (the "${garment.styleLabel}" style)` : "";
   const colorHex = garment?.colorName ? getColorHex(garment.colorName) : null;
   const colorNameDisplay = garment?.colorName ?? "";
   const isWhiteColor = !colorNameDisplay || colorNameDisplay.toLowerCase() === "white";
 
+  const fabricDescription = getFabricTextureDescription(garment);
+
   const colorInstruction = !isWhiteColor
     ? `GARMENT COLOR: The base garment in Reference Image #1 is a white template. You MUST recolor the entire garment fabric to solid ${colorNameDisplay}${colorHex ? ` (hex #${colorHex})` : ""}. Retain all garment folds, creases, highlights, shadows, buttons, collar, seams, and the neutral studio background, but the shirt fabric itself must be fully dyed in solid ${colorNameDisplay}${colorHex ? ` (hex #${colorHex})` : ""}, NOT white.`
-    : `GARMENT COLOR: Keep the garment fabric crisp white as shown in Reference Image #1.`;
+    : `GARMENT COLOR: The base garment in Reference Image #1 is a clean white template. Maintain crisp, clean, natural studio white fabric (#FFFFFF) with authentic subtle shadow gradations in the folds and drape.`;
 
   // Print/embroidery texture language for the prompt
   const printMethodKey = printMethod ?? "none";
@@ -115,12 +137,11 @@ export function buildMockupPrompt(
             ? "Dye-sublimation: ink fully infused into the garment fibers with zero edge thickness, flawlessly taking on all highlights, shadows, and cloth texture of the garment."
             : "Professional garment print: physically printed onto the textile, adopting the fabric's natural weave, folds, lighting, and ambient shadows.";
 
-  // Sleeve-side-angle prompt: if any assignment on the current view is a sleeve placement, add side-angle view
-  const sleeveAssignments = relevant.filter(
+  // Sleeve-side instruction: only add if a sleeve placement is on the current view
+  const hasSleeve = relevant.some(
     (a) => a.placement === "left_sleeve" || a.placement === "right_sleeve",
   );
-  const sleeveSideAnglePrompt =
-    sleeveAssignments.length > 0 ? SLEEVE_SIDE_ANGLE_PROMPT : "";
+  const sleeveInstruction = hasSleeve ? SLEEVE_INSTRUCTION : "";
 
   const placementLines = relevant
     .map((a) => {
@@ -140,18 +161,20 @@ export function buildMockupPrompt(
     .join("\n");
 
   const colorPreservationLine = isWhiteColor
-    ? "- The shirt fabric must remain crisp, clean white as shown in Reference Image #1."
+    ? "- The shirt fabric must remain crisp, clean natural studio white as shown in Reference Image #1."
     : `- The shirt fabric must be colored solid ${colorNameDisplay}${colorHex ? ` (hex #${colorHex})` : ""}, NOT white.`;
 
   const lines = [
     `GARMENT SPECIFICATION: Reference image #1 shows the exact ${garmentTypeWord}${styleClause} (${viewLabel}), exactly ${templateWidth}x${templateHeight} pixels.`,
+    `FABRIC TEXTILE: ${fabricDescription}`,
     colorInstruction,
     `PRINTING SPECIFICATION: ${textureLanguage}`,
-    sleeveSideAnglePrompt,
-    `TASK: Photorealistic garment mockup. Color the garment fabric to ${isWhiteColor ? "crisp white" : `${colorNameDisplay}${colorHex ? ` (hex #${colorHex})` : ""}`} as specified, and seamlessly print the logo(s) onto the fabric at the exact specified position(s).`,
+    STUDIO_LIGHTING_SPEC,
+    sleeveInstruction,
+    `TASK: Photorealistic commercial apparel product mockup. Color the garment fabric to ${isWhiteColor ? "crisp natural white" : `${colorNameDisplay}${colorHex ? ` (hex #${colorHex})` : ""}`} as specified, and seamlessly print the logo(s) onto the fabric at the exact specified position(s).`,
     "PHYSICAL PRINT REALISM REQUIREMENTS:",
     "- Fabric Deformation: The printed logo must warp and deform naturally with the folds, creases, wrinkles, and curvature of the garment fabric beneath it.",
-    "- Lighting & Shadows: The printed logo must receive the exact same ambient lighting, directional highlights, and shadow gradients present across that region of the shirt. It must not look like a flat sticker pasted on top; it must look physically printed on the garment.",
+    "- Lighting & Shadows: The printed logo must receive the exact same 3-point studio lighting, directional highlights, and shadow gradients present across that region of the shirt. It must not look like a flat sticker pasted on top; it must look physically printed on the garment.",
     "- Surface Finish: Apply the specified print texture so the ink/stitching feels tactile and authentic to real apparel manufacturing.",
     placementLines,
     "PRESERVATION RULES:",
@@ -159,7 +182,7 @@ export function buildMockupPrompt(
     colorPreservationLine,
     "- Reproduce the logo's exact colors, typography, and iconography without altering or simplifying the artwork.",
     "- Do not add any white square, background border, or canvas box behind the logo. If the logo reference has a rectangular background canvas, isolate and print only the logo insignia onto the garment.",
-    `Output a single photorealistic photograph, exactly ${templateWidth}x${templateHeight} pixels.`,
+    `Output a single, high-definition, commercial e-commerce product photograph, exactly ${templateWidth}x${templateHeight} pixels.`,
   ];
   return lines
     .filter((line) => line.trim() !== "")

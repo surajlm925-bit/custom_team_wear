@@ -72,7 +72,9 @@ export function isMockupEligible(_order: OrderData): boolean {
 }
 
 export async function resolveGarmentReference(order: OrderData, view: "front" | "back"): Promise<GarmentReference> {
-  const isLegacy = order.catalogSelection === undefined;
+  const anyOrder = order as unknown as Record<string, unknown>;
+  const catalogSel = order.catalogSelection;
+  const isLegacy = catalogSel === undefined && !anyOrder.colorName;
 
   if (isLegacy) {
     // Legacy order: use the generic silhouette template (original behaviour)
@@ -90,9 +92,10 @@ export async function resolveGarmentReference(order: OrderData, view: "front" | 
     };
   }
 
-  // Modern order with catalog selection: use white template + hex colour
-  const silhouette = order.catalogSelection?.garmentType || PRODUCT_SILHOUETTE[order.productId] || "polo";
-  const resolvedColorName = normalizeColorName(order.catalogSelection?.colorName ?? "");
+  // Modern order with catalog selection or color: use white template + hex colour
+  const silhouette = catalogSel?.garmentType || (anyOrder.garmentType as Silhouette) || PRODUCT_SILHOUETTE[order.productId] || "polo";
+  const rawColor = (catalogSel?.colorName || anyOrder.colorName || "") as string;
+  const resolvedColorName = rawColor ? normalizeColorName(rawColor) : undefined;
   const isPolo = silhouette === "polo";
   const templatePath = isPolo
     ? (view === "back" ? POLO_BACK_PATH : POLO_FRONT_PATH)
@@ -100,8 +103,8 @@ export async function resolveGarmentReference(order: OrderData, view: "front" | 
   const buffer = fs.readFileSync(templatePath);
   const descriptor: GarmentDescriptor = {
     garmentType: silhouette,
-    styleLabel: order.catalogSelection?.itemLabel,
-    colorName: resolvedColorName || order.catalogSelection?.colorName,
+    styleLabel: catalogSel?.itemLabel ?? (anyOrder.qualityId as string | undefined),
+    colorName: resolvedColorName || (rawColor || undefined),
   };
   return {
     buffer,
