@@ -295,4 +295,8 @@ test("rollbackStep strictly blocks rollback from payment if mockup was generated
   assert.equal(rollbackStep(draft), true, "Must permit rollback when mockup was skipped");
   assert.equal(draft.mockupDecision, undefined);
   assert.equal(determineStep(draft), "mockupDecision");
+
+  // If mockupGenerated is set, rollback is always blocked
+  draft.mockupGenerated = true;
+  assert.equal(rollbackStep(draft), false, "Must block rollback if mockupGenerated is set");
 });

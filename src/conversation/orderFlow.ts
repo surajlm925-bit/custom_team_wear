@@ -127,17 +127,18 @@ export async function handleWhatsAppMessage(chatId: string, message: any) {
     lowerInput === "nav:back" ||
     lowerInput === "⬅️ back"
   ) {
+    if (draft.mockupDecision === "generate" || draft.mockupGenerated) {
+      await sendMessage(
+        chatId,
+        "⚠️ Your mockup preview has already been generated! You cannot go back from this step. Please complete your payment by scanning the QR code above, or reply 'cancel' to restart."
+      );
+      return;
+    }
+
     const rolledBack = rollbackStep(draft);
     if (!rolledBack) {
-      if (determineStep(draft) === "payment" && draft.mockupDecision === "generate") {
-        await sendMessage(
-          chatId,
-          "⚠️ Your mockup preview has already been generated! You cannot go back from this step. Please complete your payment by scanning the QR code above, or reply 'cancel' to restart."
-        );
-      } else {
-        await sendMessage(chatId, "You're already at the beginning of the order flow! 👇");
-        await promptNext(chatId, draft, false);
-      }
+      await sendMessage(chatId, "You're already at the beginning of the order flow! 👇");
+      await promptNext(chatId, draft, false);
       return;
     }
     await saveDraft(chatId, draft);
@@ -219,6 +220,10 @@ export function determineStep(draft: OrderDraft): string {
 }
 
 export function rollbackStep(draft: OrderDraft): boolean {
+  if (draft.mockupDecision === "generate" || draft.mockupGenerated) {
+    return false; // No back option once the mockup is generated
+  }
+
   const currentStep = determineStep(draft);
 
   switch (currentStep) {
@@ -329,9 +334,6 @@ export function rollbackStep(draft: OrderDraft): boolean {
       return true;
 
     case "payment":
-      if (draft.mockupDecision === "generate") {
-        return false; // No back option once the mockup is generated
-      }
       if (draft.orderType === "sample") {
         delete draft.timeline;
         delete draft.timelineUrgent;
@@ -710,6 +712,7 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
       const lowerMockup = input.toLowerCase().trim();
       if (input === "mockup:generate" || lowerMockup.includes("generate") || lowerMockup === "1" || lowerMockup === "yes") {
         draft.mockupDecision = "generate";
+        draft.mockupGenerated = true;
         
         if (!draft.orderId) {
           draft.orderId = await nextOrderId();
@@ -723,7 +726,7 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
           : `🎨 Generating your preview on the T-Shirt now — one moment…`;
         await sendMessage(chatId, freeText);
 
-        // 2. Deliver the mockup
+        // 2. Deliver the mockup & persist final order snapshot
         const order = assembleOrderData(chatId, draft);
         await saveOrderSnapshot(order).catch(() => {});
         try {
@@ -732,8 +735,8 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
           console.error(`[mockupDecision] triggerMockupDelivery error for ${order.orderId}:`, deliveryErr);
         }
         
-        // 3. Save draft and then prompt for payment
-        await saveDraft(chatId, draft);
+        // 3. Final step: store all the values for the order and prompt for payment
+        await saveDraft(chatId, draft, true);
         await promptNext(chatId, draft);
       } else if (input === "mockup:skip" || lowerMockup.includes("skip") || lowerMockup === "2" || lowerMockup === "no") {
         draft.mockupDecision = "skip";
@@ -742,7 +745,9 @@ async function processStep(ctx: WhatsAppContext, draft: OrderDraft, step: string
           draft.orderId = await nextOrderId();
         }
         
-        await saveDraft(chatId, draft);
+        const order = assembleOrderData(chatId, draft);
+        await saveOrderSnapshot(order).catch(() => {});
+        await saveDraft(chatId, draft, true);
         await promptNext(chatId, draft);
       } else {
         await promptNext(chatId, draft, true);
@@ -952,7 +957,7 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
 
       if (!draft.orderId) {
         draft.orderId = await nextOrderId();
-        await saveDraft(chatId, draft);
+        await saveDraft(chatId, draft, true);
       }
 
       const order: OrderData = {
@@ -982,6 +987,8 @@ async function promptNext(chatId: string, draft: OrderDraft, isReprompt = false)
         customerChatId: `wa:${chatId}`,
         channel: "whatsapp",
       };
+
+      await saveOrderSnapshot(order).catch(() => {});
 
       // ---- S11 Payment ----
       const quoteText = renderQuoteCard(order);

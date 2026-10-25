@@ -1,26 +1,21 @@
 /**
  * Per-chat flood control — PRD §5.3, §10.1 (~20 msg/min).
- * Uses @upstash/ratelimit on the same Redis instance as sessions.
+ * Uses an in-memory sliding window for instantaneous 0ms validation.
  */
 
-import { Ratelimit } from "@upstash/ratelimit";
-import { getRedis } from "./redisClient.js";
-
-let limiter: Ratelimit | undefined;
-
-function getLimiter(): Ratelimit {
-  if (!limiter) {
-    limiter = new Ratelimit({
-      redis: getRedis(),
-      limiter: Ratelimit.slidingWindow(20, "60 s"),
-      prefix: "ratelimit:ctw",
-    });
-  }
-  return limiter;
-}
+const chatRateLimits = new Map<string, number[]>();
+const WINDOW_MS = 60 * 1000;
+const MAX_MESSAGES_PER_WINDOW = 20;
 
 /** Returns true if this chat is within the flood-control limit. */
 export async function checkRateLimit(chatId: string): Promise<boolean> {
-  const { success } = await getLimiter().limit(chatId);
-  return success;
+  const now = Date.now();
+  const history = chatRateLimits.get(chatId) || [];
+  const valid = history.filter((ts) => now - ts < WINDOW_MS);
+  if (valid.length >= MAX_MESSAGES_PER_WINDOW) {
+    return false;
+  }
+  valid.push(now);
+  chatRateLimits.set(chatId, valid);
+  return true;
 }

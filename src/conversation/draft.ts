@@ -32,6 +32,7 @@ export interface OrderDraft {
   logoReceived?: boolean;
   logos?: LogoUpload[];
   mockupDecision?: "skip" | "generate";
+  mockupGenerated?: boolean;
   paymentScreenshotId?: string;
   orderId?: string;
   confirmingCancel?: boolean;
