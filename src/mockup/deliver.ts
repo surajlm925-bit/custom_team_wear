@@ -78,36 +78,40 @@ async function defaultSendPhoto(
 }
 
 /**
- * Default compositor for production:
- * If OPENAI_API_KEY (direct) or GEMINI_API_KEY is configured, produce photorealistic
- * AI mockups via generateAiMockups. If AI generation fails or no key is set,
- * seamlessly fall back to deterministic Sharp compositing.
+ * Default compositor for online production:
+ * Strictly uses deterministic Sharp compositing for production WhatsApp delivery.
+ * AI mockup generation is reserved exclusively for local testing (Mockup Studio UI / local test scripts).
  */
 async function defaultCompositor(
   order: OrderData,
   assignments: LogoAssignment[],
   logoBuffers: Buffer[],
 ): Promise<{ view: MockupView; buffer: Buffer; costUsd?: number }[]> {
-  const env = getEnv();
-  const hasAiProvider = Boolean(env.OPENAI_API_KEY || env.GEMINI_API_KEY);
+  // Mockup testing online is disabled by default — only deterministic Sharp compositing runs online
+  const enableOnlineAi = process.env.ENABLE_ONLINE_AI_MOCKUPS === "true";
 
-  if (hasAiProvider) {
-    try {
-      console.log(`[mockup/deliver] Generating photorealistic AI mockup for order ${order.orderId}...`);
-      const aiResults = await generateAiMockups(order, assignments, logoBuffers);
-      return aiResults.map((r) => ({
-        view: r.view as MockupView,
-        buffer: r.buffer,
-        costUsd: r.costUsd,
-      }));
-    } catch (aiErr) {
-      console.error(
-        `[mockup/deliver] AI mockup generation failed for order ${order.orderId}, falling back to deterministic:`,
-        aiErr,
-      );
-      await notifyAdminsText(
-        `⚠️ AI mockup generation failed for order ${order.orderId} (falling back to deterministic proof):\n${(aiErr as Error)?.message || String(aiErr)}`,
-      ).catch(() => {});
+  if (enableOnlineAi) {
+    const env = getEnv();
+    const hasAiProvider = Boolean(env.OPENAI_API_KEY || env.GEMINI_API_KEY);
+
+    if (hasAiProvider) {
+      try {
+        console.log(`[mockup/deliver] Generating photorealistic AI mockup for order ${order.orderId}...`);
+        const aiResults = await generateAiMockups(order, assignments, logoBuffers);
+        return aiResults.map((r) => ({
+          view: r.view as MockupView,
+          buffer: r.buffer,
+          costUsd: r.costUsd,
+        }));
+      } catch (aiErr) {
+        console.error(
+          `[mockup/deliver] AI mockup generation failed for order ${order.orderId}, falling back to deterministic:`,
+          aiErr,
+        );
+        await notifyAdminsText(
+          `⚠️ AI mockup generation failed for order ${order.orderId} (falling back to deterministic proof):\n${(aiErr as Error)?.message || String(aiErr)}`,
+        ).catch(() => {});
+      }
     }
   }
 
