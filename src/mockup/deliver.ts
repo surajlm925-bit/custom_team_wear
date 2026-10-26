@@ -87,31 +87,26 @@ async function defaultCompositor(
   assignments: LogoAssignment[],
   logoBuffers: Buffer[],
 ): Promise<{ view: MockupView; buffer: Buffer; costUsd?: number }[]> {
-  // Mockup testing online is disabled by default — only deterministic Sharp compositing runs online
-  const enableOnlineAi = process.env.ENABLE_ONLINE_AI_MOCKUPS === "true";
+  const env = getEnv();
+  const hasAiProvider = Boolean(env.OPENAI_API_KEY || env.GEMINI_API_KEY);
 
-  if (enableOnlineAi) {
-    const env = getEnv();
-    const hasAiProvider = Boolean(env.OPENAI_API_KEY || env.GEMINI_API_KEY);
-
-    if (hasAiProvider) {
-      try {
-        console.log(`[mockup/deliver] Generating photorealistic AI mockup for order ${order.orderId}...`);
-        const aiResults = await generateAiMockups(order, assignments, logoBuffers);
-        return aiResults.map((r) => ({
-          view: r.view as MockupView,
-          buffer: r.buffer,
-          costUsd: r.costUsd,
-        }));
-      } catch (aiErr) {
-        console.error(
-          `[mockup/deliver] AI mockup generation failed for order ${order.orderId}, falling back to deterministic:`,
-          aiErr,
-        );
-        await notifyAdminsText(
-          `⚠️ AI mockup generation failed for order ${order.orderId} (falling back to deterministic proof):\n${(aiErr as Error)?.message || String(aiErr)}`,
-        ).catch(() => {});
-      }
+  if (hasAiProvider) {
+    try {
+      console.log(`[mockup/deliver] Generating photorealistic AI mockup for order ${order.orderId}...`);
+      const aiResults = await generateAiMockups(order, assignments, logoBuffers);
+      return aiResults.map((r) => ({
+        view: r.view as MockupView,
+        buffer: r.buffer,
+        costUsd: r.costUsd,
+      }));
+    } catch (aiErr) {
+      console.error(
+        `[mockup/deliver] AI mockup generation failed for order ${order.orderId}, falling back to deterministic:`,
+        aiErr,
+      );
+      await notifyAdminsText(
+        `⚠️ AI mockup generation failed for order ${order.orderId} (falling back to deterministic proof):\n${(aiErr as Error)?.message || String(aiErr)}`,
+      ).catch(() => {});
     }
   }
 
