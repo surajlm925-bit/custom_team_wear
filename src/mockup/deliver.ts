@@ -238,7 +238,8 @@ export async function deliverMockupForOrder(
     for (const s of stored) {
       const filename = `${order.orderId}-mockup-${s.view}.png`;
       const caption = `🎨 Here's how your logo${order.logos.length > 1 ? "s" : ""} look${order.logos.length > 1 ? "" : "s"} on the garment! (${s.view === "front" ? "Front" : "Back"} view)`;
-      const zaptiloMessageId = await sendPhoto(customerChatId, s.url, filename, caption).catch((err) => {
+      const sendUrl = s.url.includes("?") ? `${s.url}&v=${Date.now()}` : `${s.url}?v=${Date.now()}`;
+      const zaptiloMessageId = await sendPhoto(customerChatId, sendUrl, filename, caption).catch((err) => {
         console.error(`Failed to send mockup photo (${filename}) to ${customerChatId}:`, err);
         return undefined;
       });
