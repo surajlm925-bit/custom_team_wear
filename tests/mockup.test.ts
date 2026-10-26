@@ -73,6 +73,6 @@ test("generateMockups output dimensions match the template dimensions", async ()
   const logo = await makeTestLogo();
   const [result] = await generateMockups("cotton_round_neck", "center_front", logo);
   const meta = await sharp(result.buffer).metadata();
-  assert.equal(meta.width, 1024);
-  assert.equal(meta.height, 1024);
+  assert.equal(meta.width, 1086);
+  assert.equal(meta.height, 1448);
 });
